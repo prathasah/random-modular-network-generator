@@ -643,3 +643,21 @@ def connect_module_graph(G,outedge_list):
         component_cc2=len(cc2)		
 		
 ##############################################################################################
+
+def __main() :
+    """Main function to mimic C++ version behavior"""
+    try :
+    	print "Generating a simple poisson random modular graph with modularity(Q)=0.6"
+    	print "Graph has 150 nodes, 3 modules, and a network mean degree of 10"
+    	print "Generating graph....."
+        G= generate_mod_networks("poisson", 0.6, 150,3,10)
+        pos=nx.spring_layout(G)
+        draw(G,pos,node_color='#A0CBE2',width=2,edge_cmap=plt.cm.Blues,with_labels=False)
+        show()
+    except (IndexError, IOError):
+        print "try again"
+
+if __name__ == "__main__" :
+    __main()
+    
+################################################################################################

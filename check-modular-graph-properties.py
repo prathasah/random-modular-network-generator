@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-This module generates Figure 3 of the manuscript 
+This module generates data for Figure 3 of the manuscript 
 
 Title: "Exploring community structure in biological networks through null modular-network graph"
 Authors: Pratha Sah and Shweta Bansal

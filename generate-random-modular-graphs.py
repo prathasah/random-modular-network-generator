@@ -74,25 +74,21 @@ def generate_mod_networks(graphtype, Q, n,m,d):
         
         connect_trial=1
         edges_intact=True 
-        edge_list=assign_network_degree(graphtype, mod_nodes, m,nc,d) #assigns total-degree to each node
-        print ("sum of  edge list"), sum(edge_list)
-            
-        inedge_list=assign_indegrees(graphtype, mod_nodes,m,nc,wd,d,edge_list)  #assigns within-degree to each node
-        print ("sum inedge list"), sum(inedge_list)
-               
+        print ("generating degree lists......")
+        edge_list=assign_network_degree(graphtype, mod_nodes, m,nc,d) #assigns total-degree to each node                  
+        inedge_list=assign_indegrees(graphtype, mod_nodes,m,nc,wd,d,edge_list)  #assigns within-degree to each node        
         outedge_list=assign_outdegrees(m,nc,edge_list, inedge_list) #compute between-degree by formula d=wd+bd
-        print ("sum outedge list"), sum(outedge_list)
-        
+               
         outedge_graphical=is_graphical(outedge_list,mod_nodes, m,nc) # check if the outdegree (i.e between-degree) list is graphical
         
         if outedge_graphical==True:
             
-            print ("connecting out nodes")
+            print ("connecting out nodes..............")
             connect_trial=connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,inedge_list,graphtype) #connect nodes between modules using outedge list
             
 	    
             if len(G.edges())>1:
-                print ("connecting in nodes")
+                print ("connecting in nodes..............")
                 connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list) #connect nodes within a module using the inedge list
 
         graph_connected=is_connected(G) # check if the graph is connected
@@ -313,9 +309,8 @@ def connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list):
 	#integrate the sub-graph to the main graph G.
         G.add_edges_from(GI.edges())
         a+=1
-    print ("number of inedge connections="), count_inedge
     
-#####################################################################################################
+######################################################################################################
 
 #Connect instubs (form within-edges)      
 def connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,inedge_list,graphtype):
@@ -401,8 +396,6 @@ def connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,i
                 	outnodelist=[(x,y,z) if  x!=node2  else (x,y-1,z) for x,y,z in outnodelist] # reduces the degree of node1 and node 2by 1 in outnodelist
                 	
             outnodelist=[(x,y,z) for x,y,z in outnodelist if y>0 and x!=node1] # remove node if the between-degree (outstub) hits zero
-
-    print ("checking from the graph outconnections are"), len(G.edges())
 
     # remove degree correlations by edge-randomization
     if len(G.edges())>0:
@@ -644,20 +637,16 @@ def connect_module_graph(G,outedge_list):
 		
 ##############################################################################################
 
-def __main() :
+if __name__ == "__main__":
     """Main function to mimic C++ version behavior"""
     try :
     	print "Generating a simple poisson random modular graph with modularity(Q)=0.6"
-    	print "Graph has 150 nodes, 3 modules, and a network mean degree of 10"
+    	print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
     	print "Generating graph....."
-        G= generate_mod_networks("poisson", 0.6, 150,3,10)
-        pos=nx.spring_layout(G)
-        draw(G,pos,node_color='#A0CBE2',width=2,edge_cmap=plt.cm.Blues,with_labels=False)
-        show()
+        G= generate_mod_networks("poisson", 0.6, 10000,10,10)
+        filename = "edgelist_connected_modular.txt"
+	write_edgelist(G, filename)
     except (IndexError, IOError):
         print "try again"
-
-if __name__ == "__main__" :
-    __main()
-    
+  
 ################################################################################################

@@ -11,48 +11,37 @@ __maintainer__ = "Pratha Sah"
 __email__ = "ps875@georgetown.edu"
 
 
-from networkx import *
-from random import *
-from numpy import *
-import matplotlib.pyplot as plt
-from pylab import show
-from collections import *
+import networkx as nx 
+import random as rnd
+import numpy as np
+import sequence_generator as sg
 
 #################################################################################
 
 # Change log
-# 24June 2013: Corrected for the function of random number generation in scalefree distribution
 
 ################################################################################
 
 #enter the degree distribution, modularity, total network size, number of modules, and the mean degree
-def generate_mod_networks(graphtype, Q, n,m,d):
-# graphtype is "regular", "poisson", "geometric", "scalefree"
-# Q is the desired value of modularity as defined by Newman (2004)
-# n is the network size (i.e. the total number of nodes in the network)
-# d is the average network degree
-
+def generate_modular_networks(N, sfunction ,Q, m, avg_degree, **kwds):
+    """This function generates modular random connected graph with a specified
+    degree distribution and number of modules.
+    Q is the desired value of modularity as defined by Newman (2004)
+    n is the network size (i.e. the total number of nodes in the network)
+    d is the average network degree"""
 
     Qmax= 1.0*(m-1)/m
 
     if Q>=Qmax:
         raise ValueError ("Q value exceeds Qmax for the chosen number of modules. Select a lower value")    
-    
-    G=Graph()
-    G.add_nodes_from(range(0,n))
-    graph=[]
-    n_nodes=[]
+    G=nx. Graph()
+    G.add_nodes_from(range(0,N))
     # mod nodes stores the the nodes presents in a community in a dictionary
     mod_nodes={}
-    init_nodes={}
-    e1=[]
-    e={}
-
     #nodes of each module=nc, Number of nodes in modules (i.e nc) is constant
-    nc=(n/m)
-
+    nc=(N/m)
     # Calculate the average within-degree of the network
-    wd1= (((1.0*d/m)*((Q*m+1))))
+    wd1= (((1.0*avg_degree/m)*((Q*m+1))))
     wd=round(wd1,2)
  
     #Assign nodes to modules.
@@ -67,215 +56,146 @@ def generate_mod_networks(graphtype, Q, n,m,d):
     # Step 3: Create between-degree list
     # Step 4: Connect outstubs (create between-edges)
     # Step 5: Connect instubs (create within-edges)
-    connect_trial=0
-    graph_connected=False
     
-    while connect_trial==0 or connect_trial==10 or outedge_graphical==False or graph_connected==False:
-        
-        connect_trial=1
-        edges_intact=True 
+    connect_trial=100 # set initial connect_trial high to enter the while loop
+    graph_connected=False
+    outedge_graphical=False
+    while connect_trial>=10 or outedge_graphical==False or graph_connected==False:    
+        connect_trial=0
         print ("generating degree lists......")
-        edge_list=assign_network_degree(graphtype, mod_nodes, m,nc,d) #assigns total-degree to each node                  
-        inedge_list=assign_indegrees(graphtype, mod_nodes,m,nc,wd,d,edge_list)  #assigns within-degree to each node        
-        outedge_list=assign_outdegrees(m,nc,edge_list, inedge_list) #compute between-degree by formula d=wd+bd
-               
-        outedge_graphical=is_graphical(outedge_list,mod_nodes, m,nc) # check if the outdegree (i.e between-degree) list is graphical
+        degree_list=create_total_degree_sequence (N, sfunction, avg_degree, max_tries=1000, **kwds) #assigns total-degree to each node                  
+        indegree_list=create_indegree_sequence(N, sfunction, wd, m, nc, mod_nodes, avg_degree, degree_list, **kwds) #assigns within-degree to each node        
+        outdegree_list=create_outdegree_sequence(m,nc,degree_list, indegree_list) #compute between-degree by formula d=wd+bd
+        outedge_graphical=is_graphical(outdegree_list,mod_nodes, m,nc) # check if the outdegree (i.e between-degree) list is graphical
         
         if outedge_graphical==True:
-            
             print ("connecting out nodes..............")
-            connect_trial=connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,inedge_list,graphtype) #connect nodes between modules using outedge list
+            connect_trial=connect_out_nodes(G,m,nc, degree_list, mod_nodes, outdegree_list,connect_trial,indegree_list) #connect nodes between modules using outedge list
             
-	    
-            if len(G.edges())>1:
+	    if len(G.edges())>1: # connect within-module edges only when between-module edges are connected.
                 print ("connecting in nodes..............")
-                connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list) #connect nodes within a module using the inedge list
+                connect_in_nodes(G,m,degree_list, mod_nodes, indegree_list,outdegree_list) #connect nodes within a module using the inedge list
 
-        graph_connected=is_connected(G) # check if the graph is connected
+        graph_connected=nx.is_connected(G) # check if the graph is connected
         
     return G
 
 #########################################################################################
 
 #assign each node with degree based on user-defined distribution          
-def assign_network_degree(graphtype, mod_nodes, m,nc,d): 
-    
-    if graphtype is "regular":
-        edge_list=[d]*(m*nc)
-        return edge_list
+def create_total_degree_sequence (n, sfunction, avg_degree, max_tries=1000, **kwds):
 
-    if graphtype is "poisson":
-        edge_list=[]
-        condition=False
-        while condition==False:
-            condition=True
-            edge_list= list(random.poisson(lam=d, size=(m*nc)))
-            edge_list=[1 if x==0 else x for x in edge_list] # replaces all occurnces of zero degree with degree 1
+	"""
+        Creates a total-degree sequence.Ensures that the minimum degree is 1 and
+        the max degree is 1 less than the number of nodes and that the average
+        degree of the sequence generated is within a tolerance of 0.05.
 
-            #check if the sum of total-degree in each module is even. Add an edge to a random node in the module if sum is odd
-            for a in range(0,m):
-                if sum(edge_list[min(mod_nodes[a]):(max(mod_nodes[a])+1)])%2!=0: 
-                    x=choice(mod_nodes[a])
-                    edge_list[x]=edge_list[x]+1 
-			            
-            # check if the average of the total-degree list is close to the network mean degree (d). Tolerance=0.5 deviation from d.
-            if abs(d-(sum(edge_list)/(1.0*len(edge_list))))>0.05:
-                condition=False
-      
-        return edge_list
+	`n`: number of nodes
+	`sfunction`: a sequence generating function with signature (number of
+			nodes, mean)
+	`avg_degree`: mean degree
+	`max_tries`: maximum number of tries before dying. 
+	"""
 
-    if graphtype is "geometric":
+	tries=0
+	max_deg=n-1
+	is_valid_seq = False;
+        tol = 5.0;
+	while (((tol > 0.05 or (not is_valid_seq))) and tries <= max_tries):
+		trialseq = sfunction(n, avg_degree, **kwds)
+		seq=[min(max_deg, max( int(round(s)),1 )) for s in trialseq]
+		is_valid_seq = nx.is_valid_degree_sequence(seq)
+		
+		if not is_valid_seq and sum(seq)%2 !=0:
+			x=rnd.choice(xrange(len(seq)))
+			seq[x]+=1 
+		
+		tol = abs(avg_degree - (sum(seq)/(1.0*len(seq))))
+		tries += 1
 
-        edge_list=geometric_seq(d,m,nc, seq="tot_degree")
-        #check if the sum of total-degree in each module is even. Add an edge to a random node in the module if sum is odd
-        for a in range(0,m):
-            if sum(edge_list[min(mod_nodes[a]):(max(mod_nodes[a])+1)])%2!=0: 
-                x=choice(mod_nodes[a])
-                edge_list[x]=edge_list[x]+1
-
-        return edge_list
-
-    if graphtype is "scalefree":
-       
-        alpha=(m*nc)/10
-        condition=False
-        while condition==False:
-            condition=True
-            edge_list=[]
-            edge_list1= list((random.power(alpha, size=(m*nc))))
-            edge_list1=[abs(1-x) for x in edge_list1]
-            edge_list=[int(num*(m*nc-2))+1 for num in edge_list1]
-            
-            #check if the sum of total-degree in each module is even. Add an edge to a random node in the module if sum is odd
-            for a in range(0,m):
-                if sum(edge_list[min(mod_nodes[a]):(max(mod_nodes[a])+1)])%2!=0: 
-                    x=choice(mod_nodes[a])
-                    edge_list[x]=edge_list[x]+1
+	if (tries > max_tries):
+		raise nx.NetworkXError, \
+		  "Exceeded max (%d) attempts at a valid sequence."%max_tries
+	return seq
            
-            # check if the average of the total-degree list is close to the network mean degree (d). Tolerance=0.5 deviation from d.
-            if abs(d-(sum(edge_list)/(1.0*len(edge_list))))>0.05:
-                condition=False
-                if d-(sum(edge_list)/(1.0*len(edge_list)))>0.05:
-                    alpha-=0.01
-                else:
-                    alpha+=0.01
-        
-        return edge_list
         
 #############################################################################################
 
 #assign each node with within-degree based on user-defined distribution 
-def assign_indegrees(graphtype, mod_nodes, m,nc,wd,d,edge_list):
-    condition=False
-    while condition==False:
-        inedge_list=[]
-        condition=True
 
-        if graphtype=="regular":
+def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, avg_degree, degree_list, **kwds):
 
-            if (2.0*wd)-d>0:
-                inedge_list=list(random.random_integers((wd-(d-wd)),high=(wd+(d-wd)),size=m*nc))
-            else:
-                inedge_list=list(random.random_integers(0,high=(2*wd),size=m*nc))
-        
-        if graphtype=="poisson":
-            state=False
-            while state==False:
-                state=True
-                inedge_list2=random.poisson(lam=wd,size=m*nc)
-                inedge_sort=list(sort(inedge_list2))
-                edge_sort=list(sort(edge_list))
-                diff=[x-y for x,y in zip(edge_sort,inedge_sort)]
-                
-                for i in range(m*nc):
-                    if inedge_sort[i]>edge_sort[i]:
-                        state=False
-            #assign within-degree to a node such that wd(i)<=d(i)
-            inedge_list=sort_inedge(inedge_sort,edge_sort,edge_list, m,nc)
+	""" 
+	Creates indegree sequence.
+	Ensures that (i)the within-module degree of node is less than or equal to
+	its total degree; (ii) the within-module degree sequence is graphical
+	nodes; and (iii) the average within module degree of the sequence
+	generated is within a tolerance of 0.05 
 
-        if graphtype=="geometric":
-            state=False
-            while state==False:
-                state=True
-                inedge_list2=geometric_seq(wd,m,nc, seq="in_degree")
-                
-                inedge_sort=list(sort(inedge_list2))
-                
-                edge_sort=list(sort(edge_list))
-                for i in range(m*nc):
-                    if inedge_sort[i]>edge_sort[i]:
-                        state=False
-                                                
-            inedge_list=sort_inedge(inedge_sort,edge_sort,edge_list, m,nc)
+	'n': number of nodes
+	'sfunction': a sequence generating function with signature (number of
+			nodes, mean)
+	 'wd' = mean within-module degree, m= total modules in the network
+	 'nc'=average community size
+	 'mod_nodes'= dictionary of nodal membership to communities
+	'avg_degree': mean degree
+	'degree_list'= total degree sequence
+	"""
+	is_valid_seq = False;
+	is_valid_indegree=False
+	tol = 5.0;
+	
+	while (tol > 0.05 or (not is_valid_seq) or(not is_valid_indegree)):
+           	
+	    indegree_seq = sfunction(n, wd, **kwds)
+            indegree_sort=list(np.sort(indegree_seq))
+            degree_sort=list(np.sort(degree_list))
+                                             
+            for i in range(m*nc):
+                is_valid_indegree= indegree_sort[i]<= degree_sort[i]
+                if not is_valid_indegree: break
 
-        if graphtype=="scalefree":
-            state=False
-            alpha=nc/5
-            while state==False:
-                state=True
-                inedge_list=[]
-                inedge_list1= list((random.power(alpha, size=(m*nc)))) #gives a random probability value from 0 to 1 that follows power law
-                inedge_list1=[abs(1-x) for x in inedge_list1]
-                inedge_list2=[int(num*(nc-1)) for num in inedge_list1] #converting 0-1 scale to 0 to (nc-1) scale
-                
-                if abs(wd-(sum(inedge_list2)/(1.0*len(inedge_list2))))>0.1:
-                    state=False
-                    if wd-(sum(inedge_list2)/(1.0*len(inedge_list2)))>0.1:
-                        alpha-=0.01
-                    else:
-            	        alpha+=0.01
-                
-                if state!=False:
-                    inedge_sort=list(sort(inedge_list2))
-                    edge_sort=list(sort(edge_list))
-                
-                    for i in range(m*nc):
-                        if inedge_sort[i]>edge_sort[i]:
-                            state=False
-                            
-            inedge_list=sort_inedge(inedge_sort,edge_sort,edge_list, m,nc)
-            
-        #check if the sum of within-degree in a module is even. Add an indegree to a random node if sum is odd.
-        for a in xrange(m):
-            if sum(inedge_list[min(mod_nodes[a]):(max(mod_nodes[a])+1)])%2!=0: 
-                stat=False
-                while stat==False:
-                    node_add_edge=randint((min(mod_nodes[a])),(max(mod_nodes[a])))
-                    if inedge_list[node_add_edge]<edge_list[node_add_edge]: # ensure that wd<=d after adding a within-degree to the node
-                        stat=True
-                        inedge_list[node_add_edge]+=1 
-
-            #checks if module within-degree sequence is graphical 
-            if is_valid_degree_sequence (inedge_list[min(mod_nodes[a]):(max(mod_nodes[a])+1)])==False: 
-                condition=False
-
-        # check if the average of the within-degree list is close to the network mean within-degree (wd). Tolerance=0.5 deviation from wd.
-        if abs(wd-(sum(inedge_list)/(1.0*len(inedge_list))))>0.05:
-            condition=False
-            
-    return inedge_list
+            is_valid_seq=True
+            if is_valid_indegree and is_valid_seq:
+                #assign within-degree to a node such that wd(i)<=d(i)
+                indegree_list=sort_inedge(indegree_sort,degree_sort,degree_list, m,nc)
+                for module in mod_nodes:
+                    seq=[indegree_list[i] for i in mod_nodes[module]]
+                    if (sum(seq)%2)!=0: 
+                        node_add_degree=rnd.randint((min(mod_nodes[module])),(max(mod_nodes[module])))
+                        if indegree_list[node_add_degree]<degree_list[node_add_degree]: # ensure that wd<=d after adding a within-degree to the no
+                            indegree_list[node_add_degree]+=1 
+                    seq=[indegree_list[i] for i in mod_nodes[module]]
+                    
+                    is_valid_seq = nx.is_valid_degree_sequence(seq)
+                    if (not is_valid_seq): break
+            tol = abs(wd - (sum(indegree_seq)/(1.0*len(indegree_seq))))
+          
+        return indegree_list
    
 #####################################################################################################
     
 #assign each node with between-degree based on formula d=wd+bd   
-def assign_outdegrees(m,nc,edge_list, inedge_list):
-    outedge_list=[x-y for x,y in zip(edge_list,inedge_list)]
-    return outedge_list
+def create_outdegree_sequence(m,nc,degree_seq, indegree_seq):
+    """Creates out(between-module) degree sequence"""
+    outdegree_seq=[x-y for x,y in zip(degree_seq,indegree_seq)]
+    return outdegree_seq
     
 #####################################################################################################
 
 #Connect instubs (form within-edges)
-def connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list):
+def connect_in_nodes(G,m,degree_list, mod_nodes, indegree_list,outdegree_list):
+    """Connects within-module stubs (or half edges) using a modified version of 
+    Havel-Hakimi algorithm"""
     a=0
     count_inedge=0  # for code check. count the number of outedge connections made
     while a<m:
-        GI=Graph() # treat each module as an independent graph
-        trial=0
+        GI=nx.Graph() # treat each module as an independent graph
         edge1={}
         
         #create dictionary with key=node id and value=within-degree
         for num in range (min(mod_nodes[a]),(max(mod_nodes[a])+1)):
-            edge1[num]=inedge_list[num]
+            edge1[num]=indegree_list[num]
 
         # sorts within-degrees in descending order keeping the  node identity intact
         edge1_sorted=sorted(edge1.items(), key=lambda x: x[1], reverse=True) 
@@ -303,8 +223,8 @@ def connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list):
         
         randomize_graph(GI) # remove degree correlations by edge-randomization
         
-        if is_connected(GI)==False: # reconnect graph if disconnected
-        	connect_module_graph(GI,outedge_list)
+        if nx.is_connected(GI)==False: # reconnect graph if disconnected
+        	connect_module_graph(GI,outdegree_list)
 	
 	#integrate the sub-graph to the main graph G.
         G.add_edges_from(GI.edges())
@@ -312,44 +232,38 @@ def connect_in_nodes(G,m,edge_list, mod_nodes, inedge_list,outedge_list):
     
 ######################################################################################################
 
-#Connect instubs (form within-edges)      
-def connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,inedge_list,graphtype):
+#Connect outstubs (form between-edges)      
+def connect_out_nodes(G,m,nc, degree_list, mod_nodes, outdegree_list,connect_trial,indegree_list):
+    """Connects between-module stubs (or half edges) using a modified version of 
+    Havel-Hakimi algorithm"""
     nbunch=G.edges()
     G.remove_edges_from(nbunch) # additonal check: to ensure that Graph G does not have any edges from previous steps
-    state=False
+    is_valid_connection=False
 
     # maximum attemp to connect outstubs=10
-    while state==False and connect_trial<10:
-        state=True     
+    while is_valid_connection==False and connect_trial<10:
+        is_valid_connection=True     
         trial=0
-        edge1=[]
         outnodelist=[]
-        edge1={}
 
         # creates a tuple of (node#, degree, module#)
         for num in xrange(m*nc):
             my=[key for key in mod_nodes.keys() if num in mod_nodes[key]]
-            outnodelist.append((num,outedge_list[num], my[0]))  
+            outnodelist.append((num,outdegree_list[num], my[0]))  
 
         #Connect outstubs using a modified version of Havel-Hakimi algorithm
         #terminate when all the outstubs are connected
         while outnodelist:
-            if state==False:
-                break
-            shuffle(outnodelist)
+            if is_valid_connection==False: break
+            rnd.shuffle(outnodelist)
             outnodelist=[(x,y,z) for x,y,z in outnodelist if y!=0] # removes outnodes with zero outedges
-            hfm=0
-            hfm_tot=0
             
             # select module with the highest between-degree = hfm
-            for a in xrange(m):
-            	outmod_tot= sum([y for x,y,z in outnodelist if z==a])
-            	if outmod_tot>hfm_tot:
-            		hfm_tot=outmod_tot
-            		hfm=a
+            outmod_tot= [(sum([y for x,y,z in outnodelist if z==a]),a) for a in xrange(m)]
+            outmod_tot.sort(reverse=True)
+            hfm=outmod_tot[0][1]
 
             # Select node (=node1) in module=hfm which has the highest between-degree
-            possible_node1=[]
             possible_node1=[(x,y) for x,y,z in outnodelist if z==hfm]
             possible_node1=sorted(possible_node1, key=lambda x:x[1], reverse=True) 
             node1,deg1=possible_node1[0] 
@@ -359,39 +273,33 @@ def connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,i
             # (a) Nodes cannot belong to the same module as node1
             # (b) No multi-edges allowed
             for degrees in xrange(deg1):
-                if state==False: break
+                if is_valid_connection==False: break
                 node_exclude=set(G.neighbors(node1)).union(set(mod_nodes[hfm])) # criteria (a) and (b)
                 possible_node2=[(x,y,z) for x,y,z in outnodelist if x not in node_exclude]
                 possible_node2=[(x,y) for x,y,z in possible_node2] # is the list of possible nodes that node1 can connect to.
                 #terminate if there are no possible nodes left for node 1 to connenct to.
                 if len(possible_node2)>0:
-                    cd=False
-                    state=True
+                    is_isolates_avoided=False
+                    is_valid_connection=True
                 # prevent nodes with 0 inedge and 1 outedge to connect to one another -->Avoids formation of disconnected graphs
-                    while cd==False: 
-                            cd=True
+                    while not is_isolates_avoided: 
+                            is_isolates_avoided=True
                             trial==0
-                            node2,deg2= choice(list(possible_node2))
-                            if inedge_list [node1]==0 and inedge_list[node2]==0:
-                                cd=False
+                            node2,deg2= rnd.choice(list(possible_node2))
+                            if indegree_list [node1]==0 and indegree_list[node2]==0:
+                                is_isolates_avoided=False
                                 trial+=1
                             # terminate if the attempt of finding possible nodes exceed 10000
                             if trial==10000:
-                                edges_added=G.edges()
-                                G.remove_edges_from(edges_added)
-                                connect_trial+=1
-                                state=False
+                                is_valid_connection, connect_trial=remove_outedges(G, connect_trial)
                                 break
 
                 # on termination remove all the between-edges added and try again
                 else:
-                    edges_added=G.edges()
-                    G.remove_edges_from(edges_added)
-                    connect_trial+=1
-                    state=False
+                    is_valid_connection, connect_trial=remove_outedges(G, connect_trial)
                     break
             
-                if state==True:
+                if is_valid_connection==True:
                 	G.add_edge(node1,node2)
                 	outnodelist=[(x,y,z) if  x!=node2  else (x,y-1,z) for x,y,z in outnodelist] # reduces the degree of node1 and node 2by 1 in outnodelist
                 	
@@ -399,14 +307,28 @@ def connect_out_nodes(G,m,nc, edge_list, mod_nodes, outedge_list,connect_trial,i
 
     # remove degree correlations by edge-randomization
     if len(G.edges())>0:
-    	randomize_graph_outedges(G, mod_nodes, inedge_list, outedge_list)  
+    	randomize_graph_outedges(G, mod_nodes, indegree_list, outdegree_list)  
            
     return connect_trial                
     
 ##############################################################################################
 
-# check if the degree sequence is graphically realizable using algorithm by Chungphaisan (1974)
+def remove_outedges(G, connect_trial):
+    """Removes all the within-module edges of the graph"""
+    edges_added=G.edges()
+    G.remove_edges_from(edges_added)
+    connect_trial+=1
+    state=False
+    
+    return state, connect_trial
+
+##############################################################################################
+
 def is_graphical(edgelist,mod_nodes, m,nc):
+    """Check if the between-module degree sequence is graphically realizable 
+    using algorithm by Chungphaisan (1974). The algorithm allows for the 
+    assumption of modules to beindividual nodes and allows multiple-edges 
+    between the nodes."""
     state=True
     b=sum(edgelist)
     n=m
@@ -422,119 +344,70 @@ def is_graphical(edgelist,mod_nodes, m,nc):
             state=False
     return state
 
-##############################################################################################    
-   
-# generate geometric degree sequence
-def geometric_seq(d,m,nc, seq):
-    N=m*nc
-    max_trial=1000
-    avg_degree = d +0.21
-    calc_degree=0
-	
-    while(abs(d-calc_degree))>0.1:
-        if (d-calc_degree)>0.1:
-            avg_degree+=0.1
-
-        elif (d-calc_degree)<0.1:
-            avg_degree-=0.1
-        x = 1.0/avg_degree;
-        degseq = [(math.log(random.random())/math.log(1-x)) for i in xrange(N)]
-        degseq=[(int(round(x))) for x in degseq]
-        if seq=="tot_degree":
-                degseq=[x+1 for x in degseq]
-        calc_degree = sum(degseq)/(1.0*len(degseq)) # compute avg degree of generated degree sequence
-        
-    return degseq
-
 ##############################################################################################  
 
 #assign within-degree to a node such that wd(i)<=d(i)
-def sort_inedge(inedge_sort,edge_sort,edge_list, m,nc):
-    inedge_list=[]
-    inedge_list_dict={}
-    inedge_list1={}
-    edge_list1={}
+def sort_inedge(inedge_sort,edge_sort,degree_list, m,nc):
+    """Assign within-module degree to nodes from the list of random-numbers 
+    sequence generated with the constraint that within-module degree is less 
+    than or equal to the total nodal degree."""
+    indegree_list_dict={}
+    indegree_list1={}
+    degree_list1={}
     nodelist=[x for x in range(m*nc)]
-    shuffle(nodelist) # so that node are chosen at random
+    rnd.shuffle(nodelist) # so that node are chosen at random
 
     for i in range(m*nc):
-        inedge_list1[i]=inedge_sort[i]
-        edge_list1[i]=edge_sort[i]
+        indegree_list1[i]=inedge_sort[i]
+        degree_list1[i]=edge_sort[i]
                     
     iter=0
     while nodelist:
         iter=nodelist.pop() #chose a random node
-        for key,value in edge_list1.items():
-            if value==edge_list[iter]: #check for the rank (=r)of its total-degree in the sorted total-degree list
-                inedge_list_dict[iter]=inedge_list1[key] # assign within-degree with the same rank (=r) in the sorted within-degree list
+        for key,value in degree_list1.items():
+            if value==degree_list[iter]: #check for the rank (=r)of its total-degree in the sorted total-degree list
+                indegree_list_dict[iter]=indegree_list1[key] # assign within-degree with the same rank (=r) in the sorted within-degree list
                 iter+=1
-                del inedge_list1[key]
-                del edge_list1[key]
+                del indegree_list1[key]
+                del degree_list1[key]
                 break
-    inedge_list=[value for key,value in inedge_list_dict.items()]
-    return inedge_list
+    indegree_list=[value for key,value in indegree_list_dict.items()]
+    return indegree_list
         
 ##############################################################################################
 
-# Computes Q value of a graph when the nodal assignment to modules is known
-def test_modularity (G,n,m):
-
-    dict = {}
-    nc=n/m
-    mod_nodes={}
-    count=0
-    for a in range (0,m):
-        mod_nodes[a]=range(count, (count+nc))
-        count=count+nc
-    Q=0
-    for modules in range (0,m):
-        asum=0
-        esum=0
-        eii=[]
-        for node in mod_nodes[modules]:
-            aii=(G.neighbors(node))# total degree of a node
-            a_set=set(aii)
-            mod_set=set(mod_nodes[modules])
-            eii=list(a_set.intersection(mod_set))
-            asum=asum+ len(aii)
-            esum=esum+len(eii)
-       
-        denom=2.0*len(G.edges())
-        Q_calc=((esum/denom)-((asum/denom)**2))
-        Q=Q+Q_calc
-
-    return Q
-    
-##############################################################################################
-
-# randomize a network using double-edged swaps.
-#Note: This is used to randomize only the within-edges. A separate algorithm (randomize_graph_outedges) is used to randomize between-edges
 def randomize_graph(G):
+    """randomize a network using double-edged swaps.
+Note: This is used to randomize only the within-edges. A separate algorithm 
+(randomize_graph_outedges) is used to randomize between-edges"""
 
-	size = G.size() # number of edges in graph
-	its = 1
-	for counter in range(its):
-		swaps = double_edge_swap(G,nswap=5*size, max_tries= 10000*size)
+    size = G.size() # number of edges in graph
+    its = 1
+    for counter in range(its):
+	nx.double_edge_swap(G,nswap=5*size, max_tries= 10000*size)
 
 ##############################################################################################		
 
-# randomize between-edges using double-edge swaps.
-def randomize_graph_outedges(G, mod_nodes, inedge_list, outedge_list): 
+
+def randomize_graph_outedges(G, mod_nodes, indegree_list, outdegree_list): 
+    """randomize between-edges using double-edge swaps"""
+    size = G.size()
+    double_edge_swap_outedges(G,mod_nodes, indegree_list, outdegree_list, nswap=5*size, max_tries= 10000*size)
+
+##############################################################################################
 	
-	size = G.size()
-	swaps = double_edge_swap_outedges(G,mod_nodes, inedge_list, outedge_list, nswap=5*size, max_tries= 10000*size)
-	
-# similiar to the generic double-edge-swap technique with additonal constraint.
-# Constraint: Swaps that create within-edges instead of between-edges are not allowed.
-def double_edge_swap_outedges(G,mod_nodes, inedge_list, outedge_list, nswap, max_tries):
-    if len(G) < 4:
-        raise nx.NetworkXError("Graph has less than four nodes.")
+def double_edge_swap_outedges(G,mod_nodes, indegree_list, outdegree_list, nswap, max_tries):
+    """Randomizes between-modul edges of the graph. This function is similiar 
+    to the generic double-edge-swap technique with an additonal constraint: 
+    Swaps that create within-module edges are not allowed."""
+    
+    if len(G) < 4: raise nx.NetworkXError("Graph has less than four nodes.")
     n=0
     swapcount=0
-    keys,degrees=zip(*G.degree().items()) # keys, degree
-    cdf=utils.cumulative_distribution(degrees)  # cdf of degree
+    keys,degrees=zip(*G.degree().items()) # nodes, degree
+    cdf=nx.utils.cumulative_distribution(degrees)  # cdf of degree
     while swapcount < nswap:
-        (ui,xi)=utils.discrete_sequence(2,cdistribution=cdf)
+        (ui,xi)=nx.utils.discrete_sequence(2,cdistribution=cdf)
         if ui==xi :
             continue # same source, skip
         u=keys[ui] # convert index to label
@@ -546,8 +419,8 @@ def double_edge_swap_outedges(G,mod_nodes, inedge_list, outedge_list, nswap, max
             continue # same module, skip
 
         # choose target uniformly from neighbors
-        v=choice(list(G[u]))
-        y=choice(list(G[x]))
+        v=rnd.choice(list(G[u]))
+        y=rnd.choice(list(G[x]))
         
         v_mod=[module for module in mod_nodes if v in mod_nodes[module]]
         v_mod=v_mod[0]
@@ -555,7 +428,7 @@ def double_edge_swap_outedges(G,mod_nodes, inedge_list, outedge_list, nswap, max
         if v==y or y in mod_nodes[v_mod]:
             continue # same target or same module, skip
         if (x not in G[u]) and (y not in G[v]): # don't create parallel edges
-            if (inedge_list[u]+inedge_list[x]!=0)  and (inedge_list[v]+inedge_list[y]!=0):
+            if (indegree_list[u]+indegree_list[x]!=0)  and (indegree_list[v]+indegree_list[y]!=0):
 
                 G.add_edge(u,x)
                 G.add_edge(v,y)
@@ -571,81 +444,68 @@ def double_edge_swap_outedges(G,mod_nodes, inedge_list, outedge_list, nswap, max
         
 ##############################################################################################
 
-# Connect disconnected modules.
-# Note: The module cannot be used to connect the entire graph.
-def connect_module_graph(G,outedge_list):
-    cc_tot = connected_components(G)  # cc returns the connected components of G as lists cc[0], cc[1], etc.
-    tot_component_count = len(cc_tot)
-    cc={}
-    count1=0
-    count2=0
-    cc2={}
-	
-    for x in xrange(tot_component_count):
-        outedge_stubs=False
-        for node in cc_tot[x]:
-            if outedge_list[node]>0:
-                outedge_stubs=True
-            if outedge_stubs==False and len(cc_tot[x])>1:
-                cc[count1]=cc_tot[x]
-                count1+=1
-            elif outedge_stubs==True and len(cc_tot[x])>1:
-                cc2[count2]=cc_tot[x]
-                count2+=1
-    component_count = len(cc)
-    component_cc2=len(cc2)
-
-    while component_count > 0:   #while G is not connected, reduce number of components
+def connect_module_graph(G,outdegree_list):
+    """Connect disconnected modules. Note: This function cannot be used to 
+    connect the entire modular graph."""
+    cc_tot = nx.connected_components(G)  # cc returns the connected components of G as lists cc[0], cc[1], etc.  
+    isolated_comp, outedge_comp,isolated_comp_count,  outedge_comp_count =partition_network_components(cc_tot, outdegree_list)
+    
+    while isolated_comp_count > 0:   #while G is not connected, reduce number of components
         # pick a random node in the largest component cc[0] that has degree > 1
-        node1 = choice(cc[0])
+        node1 = rnd.choice(isolated_comp[0])
         # pick a node in another component whose degree >1
-        node2 = choice(cc2[choice([x for x in xrange(component_cc2)])])
+        node2 = rnd.choice(outedge_comp[rnd.choice([x for x in xrange(outedge_comp_count)])])
         while G.degree(node2)<=1:
-            node2 = choice(cc2[choice([x for x in xrange(component_cc2)])])
+            node2 = rnd.choice(outedge_comp[rnd.choice([x for x in xrange(outedge_comp_count)])])
    
         # pick neighbors of node1 and node2
-        nbr1 = choice(G.neighbors(node1))
-        nbr2 = choice(G.neighbors(node2))
+        nbr1 = rnd.choice(G.neighbors(node1))
+        nbr2 = rnd.choice(G.neighbors(node2))
 
         # swap connections between node1,nbr1 with connections between node2,nbr2
         #  to attempt to connect the two components
         G.remove_edges_from([(node1,nbr1),(node2,nbr2)])
         G.add_edges_from([(node1,node2),(nbr1,nbr2)])
 
-        cc_tot = connected_components(G)
-        tot_component_count = len(cc_tot)
-        cc={}
-        cc2={}
-        count1=0
-        count2=0
-        
-        for x in xrange(tot_component_count):
+        cc_tot = nx.connected_components(G)
+        isolated_comp, outedge_comp,isolated_comp_count,  outedge_comp_count =partition_network_components(cc_tot, outdegree_list)		
+
+##############################################################################################
+
+def partition_network_components(cc_tot, outdegree_list):
+    """Partitions network disconnected components of a module into: 
+    (a) components with no within-module edges and hence isolates, and
+    (b) components with atleast one within-module edge"""
+    tot_component_count = len(cc_tot)
+    isolated_comp={}
+    outedge_comp={}
+    count1=0
+    count2=0
+    for x in xrange(tot_component_count):
             outedge_stubs=False
             for node in cc_tot[x]:
-                if outedge_list[node]>0:
+                if outdegree_list[node]>0:
                     outedge_stubs=True
 				
             if outedge_stubs==False and len(cc_tot[x])>1:
-                cc[count1]=cc_tot[x]
+                isolated_comp[count1]=cc_tot[x]
                 count1+=1
             elif outedge_stubs==True and len(cc_tot[x])>1:
-                cc2[count2]=cc_tot[x]
+                outedge_comp[count2]=cc_tot[x]
                 count2+=1
-		
-        component_count=len(cc)
-        component_cc2=len(cc2)		
-		
+    return isolated_comp, outedge_comp, len(isolated_comp), len(outedge_comp)
 ##############################################################################################
 
 if __name__ == "__main__":
+	
     """Main function to mimic C++ version behavior"""
     try :
     	print "Generating a simple poisson random modular graph with modularity(Q)=0.6"
     	print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
     	print "Generating graph....."
-        G= generate_mod_networks("poisson", 0.6, 10000,10,10)
+        G= generate_modular_networks(10000, sg.poisson_sequence, 0.8, 10, 10)
         filename = "edgelist_connected_modular.txt"
-	write_edgelist(G, filename)
+	nx.write_edgelist(G, filename)
     except (IndexError, IOError):
         print "try again"
   

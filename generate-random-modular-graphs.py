@@ -19,16 +19,20 @@ import sequence_generator as sg
 #############################################################################
 
 # Change log
-
+# 25 July 2013: Added a function that allows variable module size according to
+#               distribution modfunction defined by the user
 #############################################################################
 
 #enter the degree distribution, modularity, total network size, number of modules, and the mean degree
-def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
+def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwds):
     """This function generates modular random connected graph with a specified
     degree distribution and number of modules.
     Q is the desired value of modularity as defined by Newman (2004)
     n is the network size (i.e. the total number of nodes in the network)
-    d is the average network degree"""
+    d is the average network degree
+    sfunction is the degree distribution of the graph
+    modfunction is the distribution of module size
+    """
 
     Qmax = 1.0*(m-1)/m
 
@@ -36,19 +40,16 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
         raise ValueError ("Q value exceeds Qmax for the chosen number of modules. Select a lower value")    
     G = nx. Graph()
     G.add_nodes_from(range(0, N))
+    # nc is the average module size
+    nc=N/(1.0*m)
     # mod nodes stores the the nodes presents in a community in a dictionary
-    mod_nodes = {}
-    #nodes of each module=nc, Number of nodes in modules (i.e nc) is constant
-    nc = (N/m)
+    mod_nodes = assign_module_membership(N, nc, m, modfunction)
+    
     # Calculate the average within-degree of the network
     wd1 = (((1.0*avg_degree/m)*((Q*m+1))))
     wd = round(wd1, 2)
  
-    #Assign nodes to modules.
-    count = 0
-    for a in range (0, m):
-        mod_nodes[a] = range(count, (count+nc))
-        count = count+nc
+    
     # Network generated in 5 steps
     # Step 1: Created total-degree list
     # Step 2: Create within-degree list
@@ -65,7 +66,7 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
         #assigns total-degree to each node  
         degree_list = create_total_degree_sequence (N, sfunction, avg_degree, max_tries=1000, **kwds) 
         #assigns within-degree to each node                
-        indegree_list = create_indegree_sequence(N, sfunction, wd, m, nc, mod_nodes, degree_list, **kwds)    
+        indegree_list = create_indegree_sequence(N, sfunction, wd, mod_nodes, degree_list, **kwds)    
         #compute between-degree by formula d=wd+bd     
         outdegree_list = create_outdegree_sequence(degree_list, indegree_list) 
         # check if the outdegree (i.e between-degree) list is graphical
@@ -74,7 +75,7 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
         if outedge_graphical == True:
             print ("connecting out nodes..............")
             #connect nodes between modules using outedge list
-            connect_trial = connect_out_nodes(G, m, nc, mod_nodes, outdegree_list,connect_trial, indegree_list) 
+            connect_trial = connect_out_nodes(G, m, mod_nodes, outdegree_list,connect_trial, indegree_list) 
             
             # connect within-module edges only when between-module edges are connected.
             if len(G.edges()) > 1: 
@@ -82,11 +83,27 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
                 #connect nodes within a module using the inedge list
 
                 connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list) 
-        graph_connected = nx.is_connected(G) # check if the graph is connected
-        
+        graph_connected = nx.is_connected(G) # check if the graph is connected 
     return G
     
 #############################################################################
+
+def assign_module_membership(n, nc, m, modfunction):
+    """assigns nodal membership to module according to the specified distribution"""  
+    tol=5 # set initial tolerance high to enter the conditional loop
+    mod_nodes={}
+    while tol>0: # total number of nodes has to be equal to n
+        trialseq=modfunction(m, nc)
+        seq=[max(2,s) for s in trialseq]
+        tol=abs(n-sum(trialseq))
+    init=0
+    for mod in xrange(m):
+        mod_nodes[mod]=[x for x in range (init, init+seq[mod])]
+        init=init+seq[mod]
+    return mod_nodes
+        
+#############################################################################       
+    
 
 #assign each node with degree based on user-defined distribution          
 def create_total_degree_sequence (n, sfunction, avg_degree, max_tries=1000, **kwds):
@@ -129,7 +146,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, max_tries=1000, **kw
 
 #assign each node with within-degree based on user-defined distribution 
 
-def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **kwds):
+def create_indegree_sequence(n, sfunction, wd, mod_nodes, degree_list, **kwds):
 
 	""" 
 	Creates indegree sequence.
@@ -157,14 +174,14 @@ def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **
             indegree_sort = list(np.sort(indegree_seq))
             degree_sort = list(np.sort(degree_list))
                                              
-            for i in range(m*nc):
+            for i in range(n):
                 is_valid_indegree = indegree_sort[i] <= degree_sort[i]
                 if not is_valid_indegree: break
 
             is_valid_seq = True
             if is_valid_indegree and is_valid_seq:
                 #assign within-degree to a node such that wd(i)<=d(i)
-                indegree_list = sort_inedge(indegree_sort, degree_sort, degree_list, m, nc)
+                indegree_list = sort_inedge(indegree_sort, degree_sort, degree_list, n)
                 for module in mod_nodes:
                     seq = [indegree_list[i] for i in mod_nodes[module]]
                     if (sum(seq)%2) != 0: 
@@ -238,7 +255,7 @@ def connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list):
 #############################################################################
 
 #Connect outstubs (form between-edges)      
-def connect_out_nodes(G, m, nc, mod_nodes, outdegree_list, connect_trial, indegree_list):
+def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_list):
     """Connects between-module stubs (or half edges) using a modified version of 
     Havel-Hakimi algorithm"""
     nbunch = G.edges()
@@ -254,7 +271,7 @@ def connect_out_nodes(G, m, nc, mod_nodes, outdegree_list, connect_trial, indegr
         outnodelist = []
 
         # creates a tuple of (node#, degree, module#)
-        for num in xrange(m*nc):
+        for num in xrange(len(G.nodes())):
             my = [key for key in mod_nodes.keys() if num in mod_nodes[key]]
             outnodelist.append((num, outdegree_list[num], my[0]))  
 
@@ -360,17 +377,17 @@ def is_graphical(edgelist, mod_nodes, m):
 #############################################################################
 
 #assign within-degree to a node such that wd(i)<=d(i)
-def sort_inedge(inedge_sort, edge_sort, degree_list, m, nc):
+def sort_inedge(inedge_sort, edge_sort, degree_list,n):
     """Assign within-module degree to nodes from the list of random-numbers 
     sequence generated with the constraint that within-module degree is less 
     than or equal to the total nodal degree."""
     indegree_list_dict = {}
     indegree_list1 = {}
     degree_list1 = {}
-    nodelist = [x for x in range(m*nc)]
+    nodelist = [x for x in xrange(n)]
     rnd.shuffle(nodelist) # so that node are chosen at random
 
-    for i in range(m * nc):
+    for i in range(n):
         indegree_list1[i] = inedge_sort[i]
         degree_list1[i] = edge_sort[i]
                     
@@ -518,10 +535,11 @@ if __name__ == "__main__":
         print "Generating a simple poisson random modular graph with modularity(Q)=0.6"
         print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
         print "Generating graph....."
-        G = generate_modular_networks(10000, sg.poisson_sequence, 0.6, 10, 10)
+        G = generate_modular_networks(10000, sg.poisson_sequence, sg.poisson_sequence, 0.6, 10, 10)
         filename = "edgelist_connected_modular.txt"
         nx.write_edgelist(G, filename)
     except (IndexError, IOError):
         print "try again"
-
+#(N, sfunction, modfunction, Q, m, nc, avg_degree, **kwds)
 #############################################################################
+

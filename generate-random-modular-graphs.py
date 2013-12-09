@@ -68,7 +68,7 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
         connect_trial = 0
         print ("Generating degree lists......")
         #assigns total-degree to each node  
-        degree_list = create_total_degree_sequence (N, sfunction, avg_degree, max_tries=1000, **kwds) 
+        degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, max_tries=1000, **kwds)
     	
         #assigns within-degree to each node                
         print ("Generating indegree lists......")
@@ -98,7 +98,7 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
     
 
 #assign each node with degree based on user-defined distribution          
-def create_total_degree_sequence (n, sfunction, avg_degree, max_tries=1000, **kwds):
+def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries=2000, **kwds):
 
         """
         Creates a total-degree sequence.Ensures that the minimum degree is 1 and
@@ -110,28 +110,41 @@ def create_total_degree_sequence (n, sfunction, avg_degree, max_tries=1000, **kw
 			nodes, mean)
 	`avg_degree`: mean degree
 	`max_tries`: maximum number of tries before dying. 
+	
+	8Nov 2013: function now assigns total degree to the nodes module-wise, to
+	ensure that mean(d(k))= mean(d). ie., mean degree of each module is equal 
+	to the network mean degree
+	
 	"""
 
-	tries = 0
-	max_deg = n-1
-	is_valid_seq = False
-        tol = 5.0
-	while (((tol > 0.05 or (not is_valid_seq))) and tries <= max_tries):
-		trialseq = sfunction(n, avg_degree, **kwds)
-		seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
-		is_valid_seq = nx.is_valid_degree_sequence(seq)
+	
+	seqlist=[]
+	# this loop assumes modules are indexed sequentially from 0 to K-1
+	for mod in xrange(len(mod_nodes.keys())):
+		tries = 0
+		max_deg = len(mod_nodes[mod]) -1
+		is_valid_seq = False
+        	tol = 5.0
 		
-		if not is_valid_seq and sum(seq)%2 !=0:
-			x = rnd.choice(xrange(len(seq)))
-			seq[x] += 1 
+		while (((tol > 0.02 or (not is_valid_seq))) and tries <= max_tries):
+			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, **kwds)
+			seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
+			is_valid_seq = nx.is_valid_degree_sequence(seq)
 		
-		tol = abs(avg_degree - (sum(seq)/(1.0*len(seq))))
-		tries += 1
-
-	if (tries > max_tries):
-		raise nx.NetworkXError, \
-		  "Exceeded max (%d) attempts at a valid sequence."%max_tries
-	return seq
+			if not is_valid_seq and sum(seq)%2 !=0:
+				x = rnd.choice(xrange(len(seq)))
+				seq[x] += 1 
+			# check if d_k (bar) = d(bar)
+			tol = abs(avg_degree - (sum(seq)/(1.0*len(seq))))
+			tries += 1	
+			if (tries > max_tries):
+				raise nx.NetworkXError, \
+			 	"Exceeded max (%d) attempts at a valid sequence."%max_tries
+	
+		seqlist.append(seq)
+	deg_list = [val for sublist in seqlist for val in sublist]
+	
+	return deg_list
            
         
 #############################################################################
@@ -155,12 +168,16 @@ def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **
 	 'mod_nodes'= dictionary of nodal membership to communities
 	'avg_degree': mean degree
 	'degree_list'= total degree sequence
+	
+	9Dec 2013: function now ensures that mean(wd(k))= mean(wd). ie., mean 
+	within-degree of each module is equal to the network mean within-degree
+	
 	"""
 	is_valid_seq = False
 	is_valid_indegree = False
 	tol = 5.0
 	
-	while (tol > 0.05 or (not is_valid_seq) or (not is_valid_indegree)):
+	while ((not is_valid_seq) or (not is_valid_indegree)):
             	
 	    indegree_seq = sfunction(n, wd, **kwds)
             indegree_sort = list(np.sort(indegree_seq))
@@ -174,19 +191,19 @@ def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **
     		
                 for module in mod_nodes:
                     seq = [indegree_list[i] for i in mod_nodes[module]]
-                    if (sum(seq)%2) != 0: 
+                    while (sum(seq)%2) != 0: 
                         node_add_degree = rnd.randint((min(mod_nodes[module])), (max(mod_nodes[module])))
                         # ensure that wd<=d and wd< (module size -1)after adding a within-degree to the node
                         if indegree_list[node_add_degree]<degree_list[node_add_degree] and  indegree_list[node_add_degree] < len(mod_nodes[module]): 
                             indegree_list[node_add_degree] += 1 
                     seq = [indegree_list[i] for i in mod_nodes[module]]
-                    
+                    tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
                     is_valid_seq = nx.is_valid_degree_sequence(seq)
                     
-                    if (not is_valid_seq):
+                    if (not is_valid_seq) and tol>0.05::
                         break                     
 
-            tol = abs(wd - (sum(indegree_seq)/(1.0*len(indegree_seq))))
+            
                  
         return indegree_list
    

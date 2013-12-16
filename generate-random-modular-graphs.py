@@ -47,6 +47,10 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
     #nodes of each module=nc, Number of nodes in modules (i.e nc) is constant
     nc = (N/m) 
     
+    # calculate tolerance for module-level within-degree and average-degree
+    # 0.01 is the tolerance on Q
+    tol = 0.01 * avg_degree * m /(1.0*(m-1))
+    
     #Assign nodes to modules.
     mod_nodes = {}
     count = 0
@@ -68,11 +72,11 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
         connect_trial = 0
         print ("Generating degree lists......")
         #assigns total-degree to each node  
-        degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, max_tries=1000, **kwds)
+        degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.5*tol, max_tries=1000, **kwds)
     	
         #assigns within-degree to each node                
         print ("Generating indegree lists......")
-        indegree_list = create_indegree_sequence(N, sfunction, wd, m, nc, mod_nodes, degree_list, **kwds)    
+        indegree_list = create_indegree_sequence(N, sfunction, wd, m, nc, mod_nodes, degree_list, tol,  **kwds)    
         
         #compute between-degree by formula d=wd+bd     
         outdegree_list = create_outdegree_sequence(degree_list, indegree_list) 
@@ -98,7 +102,7 @@ def generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds):
     
 
 #assign each node with degree based on user-defined distribution          
-def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries=2000, **kwds):
+def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, tolerance, max_tries=2000, **kwds):
 
         """
         Creates a total-degree sequence.Ensures that the minimum degree is 1 and
@@ -116,7 +120,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 	to the network mean degree
 	
 	"""
-
+	print ("tolerance of d"), tolerance
 	
 	seqlist=[]
 	# this loop assumes modules are indexed sequentially from 0 to K-1
@@ -126,7 +130,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 		is_valid_seq = False
         	tol = 5.0
 		
-		while (((tol > 0.02 or (not is_valid_seq))) and tries <= max_tries):
+		while (((tol > tolerance or (not is_valid_seq))) and tries <= max_tries):
 			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, **kwds)
 			seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
 			is_valid_seq = nx.is_valid_degree_sequence(seq)
@@ -151,7 +155,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 
 #assign each node with within-degree based on user-defined distribution 
 
-def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **kwds):
+def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, tolerance, **kwds):
 
 	""" 
 	Creates indegree sequence.
@@ -176,7 +180,7 @@ def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **
 	is_valid_seq = False
 	is_valid_indegree = False
 	tol = 5.0
-	
+	print ("tolerance of d"), tolerance
 	while ((not is_valid_seq) or (not is_valid_indegree)):
             	
 	    indegree_seq = sfunction(n, wd, **kwds)
@@ -200,7 +204,7 @@ def create_indegree_sequence(n, sfunction, wd, m, nc, mod_nodes, degree_list, **
                     tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
                     is_valid_seq = nx.is_valid_degree_sequence(seq)
                     
-                    if (not is_valid_seq) and tol>0.05::
+                    if (not is_valid_seq) and tol > tolerance:
                         break                     
 
             
@@ -578,7 +582,7 @@ if __name__ == "__main__":
     print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
     print "Generating graph....."
     #generate_modular_networks(N, sfunction, Q, m, avg_degree, **kwds)
-    G = generate_modular_networks(10000, sg.poisson_sequence, 0.6, 10, 10)
+    G = generate_modular_networks(100000, sg.poisson_sequence, 0.6, 10, 10)
     filename = "edgelist_connected_modular.txt"
     nx.write_edgelist(G, filename)
     #except (IndexError, IOError):

@@ -47,7 +47,13 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
         mod_nodes = assign_module_membership(scale, N, nc, m, wd_hat, modfunction)
         mod_sizes = [len(mod_nodes[x]) for x in mod_nodes.keys()] 
         
+        
+        # calculate tolerance for module-level within-degree and average-degree
+    	# 0.01 is the tolerance on Q
+    	tol = 0.01 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
+        
         #Qmax = 1.0 - (sum([(num/(1.0*N))**2 for num in mod_sizes]))
+        print ("mod_sizes"), mod_sizes
         #print ("Qmax=="), Qmax
         #if Q >= Qmax:
         #    raise ValueError ("Q value exceeds Qmax for the chosen number of modules. Select a lower value")    
@@ -79,12 +85,12 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             connect_trial = 0
             print ("generating degree lists......")
             #assigns total-degree to each node  
-            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, max_tries=1000, **kwds) 
+            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.5*tol, max_tries=1000, **kwds) 
             
             
             #assigns within-degree to each node                
             print ("generating indegree lists......")
-            indegree_list = create_indegree_sequence(N, m, sfunction, mod_nodes, wd, degree_list, **kwds)
+            indegree_list = create_indegree_sequence(N, m, sfunction, mod_nodes, wd, degree_list, tol, **kwds)
             if len(indegree_list)==0:
                 is_valid_module_seq= False
                 break
@@ -119,6 +125,7 @@ def assign_module_membership(scale, N, nc, m, wd_hat, modfunction):
    
     mod_nodes = {}
     estimate_se = np.std(modfunction(m, nc))/np.sqrt(m)
+  
     min_size = int(round(wd_hat + (scale*estimate_se)))
     valid_seq = False
     while not valid_seq:
@@ -138,7 +145,7 @@ def assign_module_membership(scale, N, nc, m, wd_hat, modfunction):
     
 
 #assign each node with degree based on user-defined distribution          
-def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries=2000, **kwds):
+def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, tolerance, max_tries=2000, **kwds):
 
         """
         Creates a total-degree sequence.Ensures that the minimum degree is 1 and
@@ -166,7 +173,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 		is_valid_seq = False
         	tol = 5.0
 		
-		while (((tol > 0.02 or (not is_valid_seq))) and tries <= max_tries):
+		while (((tol > tolerance  or (not is_valid_seq))) and tries <= max_tries):
 			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, **kwds)
 			seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
 			is_valid_seq = nx.is_valid_degree_sequence(seq)
@@ -174,7 +181,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 			if not is_valid_seq and sum(seq)%2 !=0:
 				x = rnd.choice(xrange(len(seq)))
 				seq[x] += 1 
-		
+			# check if d_k (bar) = d(bar)
 			tol = abs(avg_degree - (sum(seq)/(1.0*len(seq))))
 			tries += 1	
 			if (tries > max_tries):
@@ -191,7 +198,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, max_tries
 
 #assign each node with within-degree based on user-defined distribution 
 
-def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, **kwds):
+def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tolerance, **kwds):
 
 	""" 
 	Creates indegree sequence.
@@ -217,7 +224,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, **kw
         # Return empty list if the main loop breaks
 	indegree_list=[] 
 	
-	while (tol > 0.05 or (not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size)):
+	while ((not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size)):
             
 	    indegree_seq = sfunction(n, wd, **kwds)
             indegree_sort = list(np.sort(indegree_seq))
@@ -235,20 +242,20 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, **kw
     		
                 for module in mod_nodes:
                     seq = [indegree_list[i] for i in mod_nodes[module]]
-                    if (sum(seq)%2) != 0: 
+                    while (sum(seq)%2) != 0: 
                         node_add_degree = rnd.randint((min(mod_nodes[module])),(max(mod_nodes[module])))
                         # ensure that wd<=d and wd< (module size -1)after adding a within-degree to the node
-                        if indegree_list[node_add_degree]<degree_list[node_add_degree] and  indegree_list[node_add_degree] < len(mod_nodes[module]): 
+                        if indegree_list[node_add_degree] < degree_list[node_add_degree] and  indegree_list[node_add_degree] < len(mod_nodes[module]): 
                             indegree_list[node_add_degree] += 1 
                     seq = [indegree_list[i] for i in mod_nodes[module]]
                     
                     is_valid_seq = nx.is_valid_degree_sequence(seq)
-                    
-                    if (not is_valid_seq):
+                    tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
+                    if (not is_valid_seq) and tol>tolerance:
                         
                         break                     
 
-            tol = abs(wd - (sum(indegree_seq)/(1.0*len(indegree_seq))))
+            
             if connect_trial>10:break	    
           
         return indegree_list

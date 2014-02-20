@@ -53,23 +53,16 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
     	tol = 0.01 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
         
         #Qmax = 1.0 - (sum([(num/(1.0*N))**2 for num in mod_sizes]))
-        print ("mod_sizes"), mod_sizes
         #print ("Qmax=="), Qmax
         #if Q >= Qmax:
         #    raise ValueError ("Q value exceeds Qmax for the chosen number of modules. Select a lower value")    
         G = nx. Graph()
         G.add_nodes_from(range(0, N))
-      
-        
-       
+    
        
         # Calculate the average within-degree of the network
         wd1 = avg_degree*(Q + (sum([(num/(1.0*N))**2 for num in mod_sizes])))
         wd = round(wd1, 2)
-        print ("wd=========="), wd
-        
-        
-     
         
         # Network generated in 5 steps
         # Step 1: Created total-degree list
@@ -113,7 +106,6 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
 
                     connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list) 
             graph_connected = nx.is_connected(G) # check if the graph is connected 
-            print ("graph_connected"), graph_connected
 
     Q1 = test_modularity_variable_mod(G, mod_nodes)
     return G
@@ -124,12 +116,12 @@ def assign_module_membership(scale, N, nc, m, wd_hat, modfunction):
     """assigns nodal membership to module according to the specified distribution"""  
    
     mod_nodes = {}
-    estimate_se = np.std(modfunction(m, nc))/np.sqrt(m)
+    estimate_se = np.std(modfunction(m, nc, seqtype="modulesize"))/np.sqrt(m)
   
     min_size = int(round(wd_hat + (scale*estimate_se)))
     valid_seq = False
     while not valid_seq:
-        trialseq=modfunction(m-1, nc) #generate m-1  number of random nos.
+        trialseq=modfunction(m-1, nc, seqtype="modulesize") #generate m-1  number of random nos.
         seq=[max(min_size,s) for s in trialseq]
         valid_seq= (N-sum(seq)) >= min_size # so that the last module is at least size=min_size
         seq.append(N-sum(seq))
@@ -172,25 +164,23 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, tolerance
 		max_deg = len(mod_nodes[mod]) -1
 		is_valid_seq = False
         	tol = 5.0
-		
-		while (((tol > tolerance  or (not is_valid_seq))) and tries <= max_tries):
-			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, **kwds)
+		while tol > tolerance  or (not is_valid_seq) or (tries > max_tries):
+			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, seqtype="degree")
 			seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
 			is_valid_seq = nx.is_valid_degree_sequence(seq)
-		
+			
 			if not is_valid_seq and sum(seq)%2 !=0:
 				x = rnd.choice(xrange(len(seq)))
 				seq[x] += 1 
+			is_valid_seq = nx.is_valid_degree_sequence(seq)
 			# check if d_k (bar) = d(bar)
-			tol = abs(avg_degree - (sum(seq)/(1.0*len(seq))))
+			tol = abs(avg_degree - np.mean(seq))
 			tries += 1	
 			if (tries > max_tries):
 				raise nx.NetworkXError, \
 			 	"Exceeded max (%d) attempts at a valid sequence."%max_tries
-	
 		seqlist.append(seq)
 	deg_list = [val for sublist in seqlist for val in sublist]
-	
 	return deg_list
            
         
@@ -226,29 +216,31 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
 	
 	while ((not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size)):
             
-	    indegree_seq = sfunction(n, wd, **kwds)
+	    indegree_seq = sfunction(n, wd, seqtype="indegree")
             indegree_sort = list(np.sort(indegree_seq))
             degree_sort = list(np.sort(degree_list))                              
             is_valid_indegree= all([indegree_sort[i] <= degree_sort[i] for i in range(n)])==True
             mod_sizes = [len(mod_nodes[x]) for x in mod_nodes.keys()]
             is_valid_module_size = min(mod_sizes) >= max(indegree_seq)
             is_valid_seq=True
+        
             
 	    if not is_valid_module_size: connect_trial+=1           
             if is_valid_indegree and is_valid_seq and is_valid_module_size:
                 #assign within-degree to a node such that wd(i)<=d(i)
                 indegree_list = sort_inedge(indegree_sort, degree_sort, degree_list, n)
-             
-    		
+                
                 for module in mod_nodes:
                     seq = [indegree_list[i] for i in mod_nodes[module]]
+                  
                     while (sum(seq)%2) != 0: 
-                        node_add_degree = rnd.randint((min(mod_nodes[module])),(max(mod_nodes[module])))
+                        # choose a random node in the module
+                        node_add_degree = rnd.choice([i for i in mod_nodes[module]])
                         # ensure that wd<=d and wd< (module size -1)after adding a within-degree to the node
                         if indegree_list[node_add_degree] < degree_list[node_add_degree] and  indegree_list[node_add_degree] < len(mod_nodes[module]): 
                             indegree_list[node_add_degree] += 1 
-                    seq = [indegree_list[i] for i in mod_nodes[module]]
-                    
+                    	seq = [indegree_list[i] for i in mod_nodes[module]]
+                 
                     is_valid_seq = nx.is_valid_degree_sequence(seq)
                     tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
                     if (not is_valid_seq) and tol>tolerance:
@@ -385,7 +377,7 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                             if is_isolates_avoided: trial = 0 
                             # terminate if the attempt of finding possible nodes exceed 10000
                             if trial == 50000:
-                                print ("Fallllllllllllllllseeeeeeeeeee")
+                           
                                 is_valid_connection, connect_trial = remove_outedges(G, connect_trial)
                                 break
 
@@ -600,7 +592,6 @@ def adjust_indegree_seq(mod_nodes, indegree_seq):
     """checks which module does node belongs to and returns the module size"""
     mod_size=[(len(mod_nodes[s]), s) for s in mod_nodes]
     mod_size.sort()
-    print mod_size
     adjust_indegree_seq={}
     for mods in mod_size[:-1]:
         max_deg_valid=False
@@ -672,9 +663,7 @@ if __name__ == "__main__":
     print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
     print "Generating graph....."
     #generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwds)
-    G = generate_modular_networks(2000, sg.geometric_sequence, sg.poisson_sequence, 0.1, 10, 10)
-    filename = "edgelist_connected_modular.txt"
-    nx.write_edgelist(G, filename)
+    G = generate_modular_networks(2000, sg.poisson_sequence, sg.geometric_sequence, 0.1, 10, 10)
     #except (IndexError, IOError):
     #    print "try again"
 #(N, sfunction, modfunction, Q, m, nc, avg_degree, **kwds)

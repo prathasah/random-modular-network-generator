@@ -17,18 +17,20 @@ import random as rnd
 ###################################################################################################
 
 def regular_sequence (N, mean, seqtype):
-        seq=[mean]*(N)
+	"""returns a sequence with N entries and values symmetric around the mean"""
+        seq=[int(round(mean))]*(N)
         return seq
         
 ##############################################################################################   
 def poisson_sequence (N, mean, seqtype):
+	"""returns a sequence with N entries and values following a Poisson distribution with mean = mean"""
 	seq= list(np.random.poisson(lam=mean, size=(N)))
         return seq
 
 ##############################################################################################   
 
 def scalefree_sequence (N, mean, seqtype):
-	
+	"""returns a sequence with N entries and values following a Power-law distribution with mean = mean"""
 	if seqtype =="modulesize": alpha=10
 	else: alpha=1/(1.0*mean)*1000
         condition=False
@@ -48,9 +50,9 @@ def scalefree_sequence (N, mean, seqtype):
         return seq
 
 ##############################################################################################    
-   
-# generate geometric degree sequence
+
 def geometric_sequence(N, mean, seqtype):
+    """returns a sequence with N entries and values following a geometric distribution with mean = mean"""
     max_trial=1000
     avg = mean 
     calc_mean=0

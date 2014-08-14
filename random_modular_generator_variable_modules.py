@@ -36,7 +36,6 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
     #iterate till the module sequence is realizable
     is_valid_module_seq= False
     scale=0
-
     while not is_valid_module_seq:
         # assign nodes to modules based on module size distribution function
         mod_nodes = {}
@@ -645,7 +644,7 @@ def test_modularity_variable_mod(G, mod_nodes):
     print ("Summary...")
     print ("averge network degree"), avg_deg
     print ("Network size"), N
-    print ("List of module sizes"), sum(s)
+    print ("List of module sizes"), s
     print ("Estimated modularity = "), Q
   
     
@@ -658,14 +657,28 @@ def test_modularity_variable_mod(G, mod_nodes):
 if __name__ == "__main__":
 	
     """Main function to mimic C++ version behavior"""
-    #try :
-    print "Generating a simple poisson random modular graph with modularity(Q)=0.6"
-    print "Graph has 10,000 nodes, 10 modules, and a network mean degree of 10"
-    print "Generating graph....."
-    #generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwds)
-    G = generate_modular_networks(2000, sg.poisson_sequence, sg.geometric_sequence, 0.1, 10, 10)
-    #except (IndexError, IOError):
-    #    print "try again"
-#(N, sfunction, modfunction, Q, m, nc, avg_degree, **kwds)
+    
+    ### Enter the network size(N), average network degree (d), total modules in the network (m), and modularity (Q)
+    N=2000
+    d=10
+    m=10
+    Q= 0.4
+    
+    # specify the degree distribution of the graph. In it's current format the code can generate
+    # four well known degree distribution found in biological networks - scalefree, geometric, poisson and regular distribution
+    degfunction = sg.poisson_sequence
+
+    # specify the distribution of module size. The distribution can be scalefree, geometric, poisson and regular distribution (or any aribtrary sequence)
+    #in it's simplest form speicify module size tp be regular which implies that all modules are of equal size
+    modfunction = sg.regular_sequence
+    
+    try :
+    	print "Generating random modular graph with modularity(Q) = " +str(Q)
+    	print "The graph has " + str(N) + " nodes, " + str(m)+ " modules, and a network mean degree of " +str(d)
+    	print "Generating graph....."
+   
+    	G = generate_modular_networks(N, degfunction, modfunction, Q, m, d)
+    except (IndexError, IOError):
+    	print "try again"
 #############################################################################
 

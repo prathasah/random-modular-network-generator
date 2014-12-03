@@ -678,6 +678,15 @@ if __name__ == "__main__":
     	print "Generating graph....."
    
     	G = generate_modular_networks(N, degfunction, modfunction, Q, m, d)
+    	
+    	print "Saving adjacency matrix under the filename adjacency_matrix.txt"
+    	adjacency_matrix = nx.to_numpy_matrix(G)
+	np.savetxt("adjacency_matrix.txt", adjacency_matrix, delimiter="\t")
+	
+    	print "writing graph in the GraphML format under the filename random_modular_graph.graphml"
+   	# The graphml file can be uploaded in Gephi (http://gephi.github.io/) for graph visualization.
+    	nx.write_graphml(G, "random_modular_graph.graphml")
+    	
     except (IndexError, IOError):
     	print "try again"
 #############################################################################

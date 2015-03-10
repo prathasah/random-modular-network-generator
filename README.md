@@ -38,6 +38,9 @@ For users unfamiliar to Python, I have uploadeded a sample code file (mock_code.
 
 `$ python mock_code.py`
 
+Output
+================================
+The code saves the the adjacency matrix of the generated random modular graph under the filename 'adjacency_matrix.txt'. The graph is also saved in a graphml format under the filename "random_modular_graph.graphml". The graphml file can be uploaded in Gephi (http://gephi.github.io/) for graph visualization. Note that Gephi currently does not have a layout plugin to visualize modular graphs.  In the near future, I am planning to add a function in random-modular-network-generator.py code to assign each node a particular coordinate that allows easy visualization of modules (I have done this in Figure 2). Shoot us an email if you need this feature sooner than later.  
 
 
 

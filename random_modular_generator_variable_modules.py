@@ -15,12 +15,15 @@ import networkx as nx
 import random as rnd
 import numpy as np
 import sequence_generator as sg
+import matplotlib.pyplot as plt 
 
 #############################################################################
 
 # Change log
 # 25 July 2013: Added a function that allows variable module size according to
 #               distribution modfunction defined by the user
+# 10 March 2015: Fixed code. The code now generates graphs at Q=0.
+#
 #############################################################################
 
 #enter the degree distribution, modularity, total network size, number of modules, and the mean degree
@@ -37,6 +40,13 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
     is_valid_module_seq= False
     scale=0
     while not is_valid_module_seq:
+    	if Q==0: 
+    		G= generate_simple_graph(sfunction, N, avg_degree)
+    		is_valid_module_seq= True
+    		print ("Graph generated")
+    		continue
+    	
+    		
         # assign nodes to modules based on module size distribution function
         mod_nodes = {}
         nc = (1.0*N)/m # average module size
@@ -106,7 +116,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
                     connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list) 
             graph_connected = nx.is_connected(G) # check if the graph is connected 
 
-    Q1 = test_modularity_variable_mod(G, mod_nodes)
+    if Q>0: Q1 = test_modularity_variable_mod(G, mod_nodes)
     return G
     
 #############################################################################
@@ -649,6 +659,55 @@ def test_modularity_variable_mod(G, mod_nodes):
   
     
     return Q
+    
+############################################################################################## 
+def  generate_simple_graph(sfunction, N, avg_degree):
+	"""generate a simple random graph with sfunction degree sequence"""
+	
+	graphical_deg_seq= False
+	while graphical_deg_seq== False:
+		seq = sfunction(N, avg_degree, seqtype="simple_degree")
+		graphical_deg_seq= nx.is_valid_degree_sequence(seq)
+    	G = nx.havel_hakimi_graph(seq)
+    	G.remove_edges_from(G.selfloop_edges())
+   
+    	if not nx.is_connected(G):
+		connect_simple_graph(G)		
+		randomize_graph(G)
+	if not nx.is_connected(G):
+		connect_simple_graph(G)
+	
+	return G
+
+
+############################################################################################## 
+
+def connect_simple_graph(G):
+	"""check if simple graph G is disconnected and connect if necessary"""
+
+	cc = nx.connected_components(G)  # cc returns the connected components of G as lists cc[0], cc[1], etc.
+	component_count = len(cc)
+	while component_count > 1:   #while G is not connected, reduce number of components
+
+		# pick a random node in the largest component cc[0] that has degree > 1
+		node1 = rnd.choice(cc[0])
+		while G.degree(node1) == 1:
+			node1 = rnd.choice(cc[0])
+
+		# pick a node in another component
+		node2 = rnd.choice(cc[1])
+
+		# pick neighbors of node1 and node2
+		nbr1 = rnd.choice(G.neighbors(node1))
+		nbr2 = rnd.choice(G.neighbors(node2))
+
+		# swap connections between node1,nbr1 with connections between node2,nbr2
+		#  to attempt to connect the two components
+		G.remove_edges_from([(node1,nbr1),(node2,nbr2)])
+		G.add_edges_from([(node1,node2),(nbr1,nbr2)])
+
+		cc = nx.connected_components(G)
+		component_count = len(cc)  
     
     
 

@@ -33,7 +33,6 @@ def scalefree_sequence (N, mean, seqtype):
 	"""returns a sequence with N entries and values following a Power-law distribution with mean = mean"""
 	if seqtype =="modulesize": alpha=10
 	else: alpha=1/(1.0*mean)*1000
-	alpha=10
         condition=False
         tol= 5 # set initial tolerance high to enter the loop
         while tol> 0.05:

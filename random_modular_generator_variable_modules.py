@@ -97,6 +97,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
                 is_valid_module_seq= False
                 break
             else: is_valid_module_seq= True
+           
             
             #compute between-degree by formula d=wd+bd     
             outdegree_list = create_outdegree_sequence(degree_list, indegree_list) 
@@ -344,7 +345,7 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
         #Connect outstubs using a modified version of Havel-Hakimi algorithm
         #terminate when all the outstubs are connected
         while outnodelist:
-            
+            #print len(outnodelist),
             if is_valid_connection == False: break
             rnd.shuffle(outnodelist)
             outnodelist = [(x, y, z) for x, y, z in outnodelist if y != 0] # removes outnodes with zero outedges
@@ -378,22 +379,25 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                 #module edge to connect to one another
                 #Avoids formation of disconnected graphs
                     trial=0
+                    # preference to nodes with indegree>0 to connect to nodes to indegree= 0
+                    if indegree_list[node1]!=0 and [indegree_list [node] for (node,deg) in possible_node2].count(0)>=1: 
+                    	possible_node2 = [(node, deg) for node, deg in possible_node2 if indegree_list [node]]
+                 
                     while not is_isolates_avoided: 
                     	    node2, deg2 = rnd.choice(list(possible_node2))
                             trial+=1
                             is_isolates_avoided = indegree_list [node1] != 0 or indegree_list[node2] != 0
                             
                             if is_isolates_avoided: trial = 0 
+                            
                             # terminate if the attempt of finding possible nodes exceed 10000
                             if trial == 50000:
-                           
-                                is_valid_connection, connect_trial = remove_outedges(G, connect_trial)
+                           	is_valid_connection, connect_trial = remove_outedges(G, connect_trial)
                                 break
 
                 # on termination remove all the between-edges added and try again
                 else:
                     is_valid_connection, connect_trial = remove_outedges(G, connect_trial)
-                   
                     break
             
                 if is_valid_connection == True:
@@ -403,7 +407,7 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
             
             # remove node if the between-degree (outstub) hits zero    	
             outnodelist = [(x, y, z) for x, y, z in outnodelist if y > 0 and x != node1] 
-
+	  
     # remove degree correlations by edge-randomization
     if len(G.edges()) > 0:
     	randomize_graph_outedges(G, mod_nodes, indegree_list, outdegree_list)  
@@ -548,7 +552,7 @@ def double_edge_swap_outedges(G, mod_nodes, indegree_list, outdegree_list, nswap
 def connect_module_graph(G, outdegree_list):
     """Connect disconnected modules. Note: This function cannot be used to 
     connect the entire modular graph."""
-    cc_tot = nx.connected_components(G)  # cc returns the connected components of G as lists cc[0], cc[1], etc.  
+    cc_tot = list(nx.connected_components(G))  # cc returns the connected components of G as lists cc[0], cc[1], etc.  
     isolated_comp, outedge_comp, isolated_comp_count, outedge_comp_count = partition_network_components(cc_tot, outdegree_list)
     
     while isolated_comp_count > 0:   #while G is not connected, reduce number of components
@@ -568,7 +572,7 @@ def connect_module_graph(G, outdegree_list):
         G.remove_edges_from([(node1, nbr1), (node2, nbr2)])
         G.add_edges_from([(node1, node2), (nbr1, nbr2)])
 
-        cc_tot = nx.connected_components(G)
+        cc_tot = list(nx.connected_components(G))
         isolated_comp, outedge_comp, isolated_comp_count, outedge_comp_count = partition_network_components(cc_tot, outdegree_list)		
 
 #############################################################################
@@ -665,17 +669,32 @@ def  generate_simple_graph(sfunction, N, avg_degree):
 	"""generate a simple random graph with sfunction degree sequence"""
 	
 	graphical_deg_seq= False
-	while graphical_deg_seq== False:
-		seq = sfunction(N, avg_degree, seqtype="simple_degree")
-		graphical_deg_seq= nx.is_valid_degree_sequence(seq)
-    	G = nx.havel_hakimi_graph(seq)
-    	G.remove_edges_from(G.selfloop_edges())
-   
-    	if not nx.is_connected(G):
-		connect_simple_graph(G)		
-		randomize_graph(G)
-	if not nx.is_connected(G):
-		connect_simple_graph(G)
+	is_connected_graph = False
+	while is_connected_graph == False:
+		while graphical_deg_seq== False:
+			seq = sfunction(N, avg_degree, seqtype="simple_degree")
+			graphical_deg_seq= nx.is_valid_degree_sequence(seq)
+		G = nx.havel_hakimi_graph(seq)
+		G.remove_edges_from(G.selfloop_edges())
+		   
+		
+		if not nx.is_connected(G):
+			try: 
+				connect_simple_graph(G)
+				is_connected_graph = True
+				randomize_graph(G)	
+			except (IndexError): is_connected_graph = False
+			
+			
+		if not nx.is_connected(G):
+			try:
+				connect_simple_graph(G)
+				is_connected_graph = True
+				
+			
+			except (IndexError): 
+				is_connected_graph = False
+				graphical_deg_seq= False
 	
 	return G
 
@@ -685,10 +704,10 @@ def  generate_simple_graph(sfunction, N, avg_degree):
 def connect_simple_graph(G):
 	"""check if simple graph G is disconnected and connect if necessary"""
 
-	cc = nx.connected_components(G)  # cc returns the connected components of G as lists cc[0], cc[1], etc.
+	cc = list(nx.connected_components(G))  # cc returns the connected components of G as lists cc[0], cc[1], etc
 	component_count = len(cc)
 	while component_count > 1:   #while G is not connected, reduce number of components
-
+		
 		# pick a random node in the largest component cc[0] that has degree > 1
 		node1 = rnd.choice(cc[0])
 		while G.degree(node1) == 1:
@@ -706,9 +725,8 @@ def connect_simple_graph(G):
 		G.remove_edges_from([(node1,nbr1),(node2,nbr2)])
 		G.add_edges_from([(node1,node2),(nbr1,nbr2)])
 
-		cc = nx.connected_components(G)
+		cc =  list(nx.connected_components(G))
 		component_count = len(cc)  
-    
     
 
 #############################################################################

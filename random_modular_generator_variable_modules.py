@@ -95,7 +95,6 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             indegree_list = create_indegree_sequence(N, m, sfunction, mod_nodes, wd, degree_list, tol, **kwds)
             if len(indegree_list)==0:
                 is_valid_module_seq= False
-                print " is_valid_module_seq",  is_valid_module_seq 
                 break
             else: is_valid_module_seq= True
            
@@ -235,8 +234,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
             is_valid_module_size = min(mod_sizes) >= max(indegree_seq)
             is_valid_seq=True
         
-            print is_valid_indegree,  sum([indegree_sort[i]  > degree_sort[i]  for i in range(n)])
-	    if not is_valid_module_size: connect_trial+=1           
+            if not is_valid_module_size: connect_trial+=1           
             if is_valid_indegree and is_valid_seq and is_valid_module_size:
                 #assign within-degree to a node such that wd(i)<=d(i)
                 indegree_list = sort_inedge(indegree_sort, degree_sort, degree_list, n)
@@ -374,7 +372,6 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                 possible_node2 = [(x, y) for x, y, z in possible_node2] 
                 #terminate if there are no possible nodes left for node 1 to connenct to.
                 if len(possible_node2) > 0:
-                    #print node1, deg1, len(list(possible_node2)), 
                     is_isolates_avoided = False
                     is_valid_connection = True
                 # prevent nodes with 0within- module edge and one between-
@@ -384,7 +381,6 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                     # preference to nodes with indegree>0 to connect to nodes to indegree= 0
                     if indegree_list[node1]!=0 and [indegree_list [node] for (node,deg) in possible_node2].count(0)>1: 
                     	possible_node2 = [(node, deg) for node, deg in possible_node2 if indegree_list [node]==0]
-                    #print ("After processing"), len(list(possible_node2))
                     while not is_isolates_avoided: 
                     	    node2, deg2 = rnd.choice(list(possible_node2))
                             trial+=1

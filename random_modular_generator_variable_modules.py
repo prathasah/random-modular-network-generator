@@ -40,11 +40,11 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
     is_valid_module_seq= False
     scale=0
     while not is_valid_module_seq:
-    	if Q==0: 
-    		G= generate_simple_graph(sfunction, N, avg_degree)
-    		is_valid_module_seq= True
-    		print ("Graph generated")
-    		continue
+    	#if Q==0: 
+    	#	G= generate_simple_graph(sfunction, N, avg_degree)
+    	#	is_valid_module_seq= True
+    	#	print ("Graph generated")
+    	#	continue
     	
     		
         # assign nodes to modules based on module size distribution function
@@ -58,8 +58,8 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
         
         
         # calculate tolerance for module-level within-degree and average-degree
-    	# 0.01 is the tolerance on Q
-    	tol = 0.01 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
+    	# 0.005 is the tolerance on Q
+    	tol = 0.001 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
         
         #Qmax = 1.0 - (sum([(num/(1.0*N))**2 for num in mod_sizes]))
         #print ("Qmax=="), Qmax
@@ -87,7 +87,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             connect_trial = 0
             print ("generating degree lists......")
             #assigns total-degree to each node  
-            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.5*tol, max_tries=1000, **kwds) 
+            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.1*tol, max_tries=1000, **kwds) 
             
             
             #assigns within-degree to each node                
@@ -95,6 +95,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             indegree_list = create_indegree_sequence(N, m, sfunction, mod_nodes, wd, degree_list, tol, **kwds)
             if len(indegree_list)==0:
                 is_valid_module_seq= False
+                print " is_valid_module_seq",  is_valid_module_seq 
                 break
             else: is_valid_module_seq= True
            
@@ -117,7 +118,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
                     connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list) 
             graph_connected = nx.is_connected(G) # check if the graph is connected 
 
-    if Q>0: Q1 = test_modularity_variable_mod(G, mod_nodes)
+    Q1 = test_modularity_variable_mod(G, mod_nodes)
     return G
     
 #############################################################################
@@ -226,7 +227,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
 	
 	while ((not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size)):
             
-	    indegree_seq = sfunction(n, wd, seqtype="indegree")
+            indegree_seq = sfunction(n, wd, seqtype="indegree")
             indegree_sort = list(np.sort(indegree_seq))
             degree_sort = list(np.sort(degree_list))                              
             is_valid_indegree= all([indegree_sort[i] <= degree_sort[i] for i in range(n)])==True
@@ -234,7 +235,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
             is_valid_module_size = min(mod_sizes) >= max(indegree_seq)
             is_valid_seq=True
         
-            
+            print is_valid_indegree,  sum([indegree_sort[i]  > degree_sort[i]  for i in range(n)])
 	    if not is_valid_module_size: connect_trial+=1           
             if is_valid_indegree and is_valid_seq and is_valid_module_size:
                 #assign within-degree to a node such that wd(i)<=d(i)
@@ -254,7 +255,6 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
                     is_valid_seq = nx.is_valid_degree_sequence(seq)
                     tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
                     if (not is_valid_seq) and tol>tolerance:
-                        
                         break                     
 
             
@@ -370,9 +370,11 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                 node_exclude = set(G.neighbors(node1)).union(set(mod_nodes[hfm]))
                 possible_node2 = [(x, y, z) for x, y, z in outnodelist if x not in node_exclude]
                 # list of possible nodes that node1 can connect to.
+                 
                 possible_node2 = [(x, y) for x, y, z in possible_node2] 
                 #terminate if there are no possible nodes left for node 1 to connenct to.
                 if len(possible_node2) > 0:
+                    #print node1, deg1, len(list(possible_node2)), 
                     is_isolates_avoided = False
                     is_valid_connection = True
                 # prevent nodes with 0within- module edge and one between-
@@ -380,9 +382,9 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                 #Avoids formation of disconnected graphs
                     trial=0
                     # preference to nodes with indegree>0 to connect to nodes to indegree= 0
-                    if indegree_list[node1]!=0 and [indegree_list [node] for (node,deg) in possible_node2].count(0)>=1: 
-                    	possible_node2 = [(node, deg) for node, deg in possible_node2 if indegree_list [node]]
-                 
+                    if indegree_list[node1]!=0 and [indegree_list [node] for (node,deg) in possible_node2].count(0)>1: 
+                    	possible_node2 = [(node, deg) for node, deg in possible_node2 if indegree_list [node]==0]
+                    #print ("After processing"), len(list(possible_node2))
                     while not is_isolates_avoided: 
                     	    node2, deg2 = rnd.choice(list(possible_node2))
                             trial+=1

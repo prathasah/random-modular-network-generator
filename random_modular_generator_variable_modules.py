@@ -40,13 +40,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
     is_valid_module_seq= False
     scale=0
     while not is_valid_module_seq:
-    	#if Q==0: 
-    	#	G= generate_simple_graph(sfunction, N, avg_degree)
-    	#	is_valid_module_seq= True
-    	#	print ("Graph generated")
-    	#	continue
-    	
-    		
+	
         # assign nodes to modules based on module size distribution function
         mod_nodes = {}
         nc = (1.0*N)/m # average module size
@@ -95,7 +89,6 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             indegree_list = create_indegree_sequence(N, m, sfunction, mod_nodes, wd, degree_list, tol, **kwds)
             if len(indegree_list)==0:
                 is_valid_module_seq= False
-                print " is_valid_module_seq",  is_valid_module_seq 
                 break
             else: is_valid_module_seq= True
            
@@ -104,7 +97,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             outdegree_list = create_outdegree_sequence(degree_list, indegree_list) 
             # check if the outdegree (i.e between-degree) list is graphical
             outedge_graphical = is_graphical(outdegree_list, mod_nodes, m) 
-            
+            print ("outdegree list graphical?"), outedge_graphical
             if outedge_graphical == True:
                 print ("connecting out nodes..............")
                 #connect nodes between modules using outedge list
@@ -220,12 +213,13 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
 	is_valid_seq = False
 	is_valid_indegree = False
 	is_valid_module_size=False
+	is_valid_outdegree = True
 	tol = 5.0
 	connect_trial=0
         # Return empty list if the main loop breaks
 	indegree_list=[] 
 	
-	while ((not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size)):
+	while ((not is_valid_seq) or (not is_valid_indegree) or (not is_valid_module_size) or (not is_valid_outdegree)):
             
             indegree_seq = sfunction(n, wd, seqtype="indegree")
             indegree_sort = list(np.sort(indegree_seq))
@@ -234,13 +228,18 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
             mod_sizes = [len(mod_nodes[x]) for x in mod_nodes.keys()]
             is_valid_module_size = min(mod_sizes) >= max(indegree_seq)
             is_valid_seq=True
-        
-            print is_valid_indegree,  sum([indegree_sort[i]  > degree_sort[i]  for i in range(n)])
+            
+           
 	    if not is_valid_module_size: connect_trial+=1           
             if is_valid_indegree and is_valid_seq and is_valid_module_size:
                 #assign within-degree to a node such that wd(i)<=d(i)
                 indegree_list = sort_inedge(indegree_sort, degree_sort, degree_list, n)
-                
+                #if network has two modules then sum(outdegree) for module 1 has to be equal to sum(outdegree) of module 2
+           	if m==2: 
+            		mod1, mod2 = mod_nodes.keys()
+            		is_valid_outdegree = sum([(degree_list[i] -indegree_list[i]) for i in mod_nodes[mod1]]) == sum([(degree_list[i] -indegree_list[i])  for i in mod_nodes[mod2]])
+            		
+            	
                 for module in mod_nodes:
                     seq = [indegree_list[i] for i in mod_nodes[module]]
                   
@@ -258,7 +257,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
                         break                     
 
             
-            if connect_trial>50:break	    
+            if connect_trial>10:break	    
           
         return indegree_list
    
@@ -332,7 +331,7 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
     is_valid_connection = False
 
     # maximum attemp to connect outstubs=10
-    while is_valid_connection == False and connect_trial < 50:
+    while is_valid_connection == False and connect_trial < 10:
         is_valid_connection = True     
         trial = 0
         outnodelist = []
@@ -345,7 +344,7 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
         #Connect outstubs using a modified version of Havel-Hakimi algorithm
         #terminate when all the outstubs are connected
         while outnodelist:
-            #print len(outnodelist),
+            
             if is_valid_connection == False: break
             rnd.shuffle(outnodelist)
             outnodelist = [(x, y, z) for x, y, z in outnodelist if y != 0] # removes outnodes with zero outedges
@@ -354,11 +353,12 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
             outmod_tot = [(sum([y for x, y, z in outnodelist if z == a]), a) for a in xrange(m)]
             outmod_tot.sort(reverse = True)
             hfm = outmod_tot[0][1]
-
+	 
             # Select node (=node1) in module=hfm which has the highest between-degree
             possible_node1 = [(x, y) for x, y, z in outnodelist if z == hfm]
             possible_node1 = sorted(possible_node1, key = lambda x:x[1], reverse = True) 
             node1, deg1 = possible_node1[0] 
+
             
             # connect all the outstubs of node1 to random possible nodes
             # Criteria for selecting possible nodes
@@ -372,11 +372,12 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                 # list of possible nodes that node1 can connect to.
                  
                 possible_node2 = [(x, y) for x, y, z in possible_node2] 
+                
                 #terminate if there are no possible nodes left for node 1 to connenct to.
                 if len(possible_node2) > 0:
-                    #print node1, deg1, len(list(possible_node2)), 
                     is_isolates_avoided = False
                     is_valid_connection = True
+                
                 # prevent nodes with 0within- module edge and one between-
                 #module edge to connect to one another
                 #Avoids formation of disconnected graphs
@@ -384,7 +385,6 @@ def connect_out_nodes(G, m, mod_nodes, outdegree_list, connect_trial, indegree_l
                     # preference to nodes with indegree>0 to connect to nodes to indegree= 0
                     if indegree_list[node1]!=0 and [indegree_list [node] for (node,deg) in possible_node2].count(0)>1: 
                     	possible_node2 = [(node, deg) for node, deg in possible_node2 if indegree_list [node]==0]
-                    #print ("After processing"), len(list(possible_node2))
                     while not is_isolates_avoided: 
                     	    node2, deg2 = rnd.choice(list(possible_node2))
                             trial+=1
@@ -442,11 +442,16 @@ def is_graphical(edgelist, mod_nodes, m):
         s[a+1] = sum(edgelist[min(mod_nodes[a]):(max(mod_nodes[a])+1)])
     if b%2 != 0:
         state = False
-    for j in range(1, n):
-        lhs = sum((s[i]-(b*j*(j-1))) for i in range (1, j+1))
-        rhs = sum((min((j*b), s[i])) for i in range(j+1, n+1))
-        if lhs > rhs:
-            state = False
+    if m==2: 
+    	if s[1]!=s[2]:state=False
+    else:
+	    lhs=[]
+	    rhs=[]
+	    for j in range(1, n+1):
+	    	lhs.append(sum([s[i] for i in range (1, j+1)])-(b*j*(j-1)))
+	    	rhs.append(sum([min((j*b), s[i]) for i in range(j+1, n+1)]))
+	   
+	    if lhs > rhs:state = False
     return state
 
 #############################################################################

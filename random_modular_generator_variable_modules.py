@@ -14,7 +14,7 @@ __email__ = "ps875@georgetown.edu"
 import networkx as nx 
 import random as rnd
 import numpy as np
-import sequence_generator as sg
+#import sequence_generator as sg
 import matplotlib.pyplot as plt 
 
 #############################################################################
@@ -53,7 +53,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
         
         # calculate tolerance for module-level within-degree and average-degree
     	# 0.005 is the tolerance on Q
-    	tol = 0.001 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
+    	tol = 0.01 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
         
         #Qmax = 1.0 - (sum([(num/(1.0*N))**2 for num in mod_sizes]))
         #print ("Qmax=="), Qmax

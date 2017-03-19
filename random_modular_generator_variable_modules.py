@@ -53,8 +53,8 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
         
         # calculate tolerance for module-level within-degree and average-degree
     	# 0.005 is the tolerance on Q
-    	tol = 0.01 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
-        
+    	tol = 0.1 * avg_degree/(1.0* (1-sum([(num/(1.0*N))**2 for num in mod_sizes])))
+        #print ("tol=="), tol
         #Qmax = 1.0 - (sum([(num/(1.0*N))**2 for num in mod_sizes]))
         #print ("Qmax=="), Qmax
         #if Q >= Qmax:
@@ -81,7 +81,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
             connect_trial = 0
             print ("generating degree lists......")
             #assigns total-degree to each node  
-            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.1*tol, max_tries=1000, **kwds) 
+            degree_list = create_total_degree_sequence (N, sfunction, avg_degree, mod_nodes, 0.01*tol, max_tries=1000, **kwds) 
             
             
             #assigns within-degree to each node                
@@ -183,6 +183,7 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, tolerance
 			if (tries > max_tries):
 				raise nx.NetworkXError, \
 			 	"Exceeded max (%d) attempts at a valid sequence."%max_tries
+			
 		seqlist.append(seq)
 	deg_list = [val for sublist in seqlist for val in sublist]
 	return deg_list

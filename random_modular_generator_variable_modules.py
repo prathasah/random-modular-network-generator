@@ -171,12 +171,12 @@ def create_total_degree_sequence (n, sfunction, avg_degree, mod_nodes, tolerance
 		while tol > tolerance  or (not is_valid_seq) or (tries > max_tries):
 			trialseq = sfunction(len(mod_nodes[mod]), avg_degree, seqtype="degree")
 			seq = [min(max_deg, max( int(round(s)), 1 )) for s in trialseq]
-			is_valid_seq = nx.is_valid_degree_sequence(seq)
+			is_valid_seq = nx.is_valid_degree_sequence_havel_hakimi(seq)
 			
 			if not is_valid_seq and sum(seq)%2 !=0:
 				x = rnd.choice(xrange(len(seq)))
 				seq[x] += 1 
-			is_valid_seq = nx.is_valid_degree_sequence(seq)
+			is_valid_seq = nx.is_valid_degree_sequence_havel_hakimi(seq)
 			# check if d_k (bar) = d(bar)
 			tol = abs(avg_degree - np.mean(seq))
 			tries += 1	
@@ -252,7 +252,7 @@ def create_indegree_sequence(n, m , sfunction, mod_nodes, wd,  degree_list, tole
                             indegree_list[node_add_degree] += 1 
                     	seq = [indegree_list[i] for i in mod_nodes[module]]
                  
-                    is_valid_seq = nx.is_valid_degree_sequence(seq)
+                    is_valid_seq = nx.is_valid_degree_sequence_havel_hakimi(seq)
                     tol = abs(wd - (sum(seq)/(1.0*len(seq)))) #ensure that wd_k(bar) = wd(bar)
                     if (not is_valid_seq) and tol>tolerance:
                         break                     
@@ -517,7 +517,8 @@ def double_edge_swap_outedges(G, mod_nodes, indegree_list, outdegree_list, nswap
     if len(G) < 4: raise nx.NetworkXError("Graph has less than four nodes.")
     n = 0
     swapcount = 0
-    keys, degrees = zip(*G.degree().items()) # nodes, degree
+    #keys, degrees = zip(*G.degree().items()) # nodes, degree
+    keys, degrees = zip(*G.degree()) # nodes, degree
     cdf = nx.utils.cumulative_distribution(degrees)  # cdf of degree
     while swapcount < nswap:
         (ui, xi) = nx.utils.discrete_sequence(2, cdistribution=cdf)
@@ -572,8 +573,8 @@ def connect_module_graph(G, outdegree_list):
             node2 = rnd.choice(outedge_comp[rnd.choice([x for x in xrange(outedge_comp_count)])])
    
         # pick neighbors of node1 and node2
-        nbr1 = rnd.choice(G.neighbors(node1))
-        nbr2 = rnd.choice(G.neighbors(node2))
+        nbr1 = rnd.choice([n for n in G.neighbors(node1)])
+        nbr2 = rnd.choice([n for n in G.neighbors(node2)])
 
         # swap connections between node1,nbr1 with connections between node2,nbr2
         #  to attempt to connect the two components
@@ -639,8 +640,8 @@ def test_modularity_variable_mod(G, mod_nodes):
     
     mods = len(mod_nodes.keys()) # number of modules
     s= [len(mod_nodes[x]) for x in xrange (mods)]
-    
-    avg_deg= np.mean((G.degree()).values())
+    nodes, degrees = zip(*G.degree()) # nodes, degree
+    avg_deg= np.mean(degrees)
     N=len(G.nodes())
     Q=0
     wd_bar=[]
@@ -651,7 +652,7 @@ def test_modularity_variable_mod(G, mod_nodes):
         wdsum=[]
         dsum=[]
         for node in mod_nodes[modules]:
-            aii=(G.neighbors(node))# total degree of a node
+            aii=[n for n in G.neighbors(node)]# total degree of a node
             a_set=set(aii) # set of all the neighbors
             mod_set=set(mod_nodes[modules]) # set of nodes in nodal module
             eii=list(a_set.intersection(mod_set)) #set of neighbors present in the same module

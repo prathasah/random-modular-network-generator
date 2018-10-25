@@ -32,7 +32,7 @@ def poisson_sequence (N, mean, seqtype):
 def scalefree_sequence (N, mean, seqtype):
 	"""returns a sequence with N entries and values following a Power-law distribution with mean = mean"""
 	if seqtype =="modulesize": alpha=10
-	else: alpha=1/(1.0*mean)*1000
+	else: alpha=1/(1.0*mean)*10
         condition=False
         tol= 5 # set initial tolerance high to enter the loop
         while tol> 0.2:
@@ -42,13 +42,13 @@ def scalefree_sequence (N, mean, seqtype):
             if seqtype == "modulesize": seq=[int(num*(N*mean-1)) for num in seq1]
             if seqtype == "simple_degree": seq=[int(num*(N-2))+1 for num in seq1]
             else:  seq=[int(num*(N-1)) for num in seq1]
-            tol = abs(mean-np.mean(seq))          
+            tol = abs(mean-np.mean(seq))   
+	    #print alpha, mean, np.mean(seq)       
             # check if the average of the total-degree list is close to the network mean degree (d). Tolerance=0.5 deviation from d.
             if tol>0.2:
                 if mean-np.mean(seq)>0.05:alpha-=0.05
                 else:alpha+=0.05
                 
-           
         return seq
 
 ##############################################################################################    

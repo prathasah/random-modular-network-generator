@@ -21,7 +21,10 @@ From  Figure 2, Sah *et al.* (2014)
 
 Dependencies
 ================================
-Networkx Python package is required. Link to install Networkx can be found [here](https://networkx.github.io/). The generator also requires sequence_generator.py script which is provided.
+* [Python 2.7](http://python.org/)
+* [Networkx 2.2](https://networkx.github.io/)
+
+Link to install Networkx can be found [here](https://networkx.github.io/). The generator also requires sequence_generator.py script which is provided.
 
 Usage
 ================================

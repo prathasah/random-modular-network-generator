@@ -25,13 +25,13 @@ sfunction = sg.poisson_sequence
 
 # specify the distribution of module size. The distribution can be scalefree, geometric, poisson and regular distribution (or any aribtrary sequence)
 #in it's simplest form speicify module size tp be regular which implies that all modules are of equal size
-modfunction = sg.poisson_sequence
+modfunction = sg.regular_sequence
 
 # generate the graph! 
 
 print "Generating a simple poisson random modular graph with modularity(Q)= " + str(Q)
 print "Graph has " + str(N) + " nodes, " +str(m)+ " modules, and a network mean degree of " + str(d)
 print "Generating graph....." 
-G = rmg.generate_modular_networks(N, sfunction, modfunction, Q, m, d)
+G = rmg.generate_modular_networks(N, sfunction, modfunction, Q, m, d, verbose=True)
 #nx.write_graphml(G, "random_modular_graph_Q"+str(Q)+"_N"+str(N)+"_d"+str(d)+"_m"+str(m)+".graphml")
 nx.write_graphml(G, "random_graph_poisson_N"+str(N)+"_d"+str(d)+".graphml")

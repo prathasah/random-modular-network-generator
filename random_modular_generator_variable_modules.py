@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 #############################################################################
 
 #enter the degree distribution, modularity, total network size, number of modules, and the mean degree
-def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwds):
+def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, verbose=False, **kwds):
     """This function generates modular random connected graph with a specified
     degree distribution and number of modules.
     Q is the desired value of modularity as defined by Newman (2004)
@@ -111,7 +111,7 @@ def generate_modular_networks(N, sfunction, modfunction, Q, m, avg_degree, **kwd
                     connect_in_nodes(G, m, mod_nodes, indegree_list, outdegree_list) 
             graph_connected = nx.is_connected(G) # check if the graph is connected 
 
-    Q1 = test_modularity_variable_mod(G, mod_nodes)
+    Q1 = test_modularity_variable_mod(G, mod_nodes, verbose)
     return G
     
 #############################################################################
@@ -635,7 +635,7 @@ def adjust_indegree_seq(mod_nodes, indegree_seq):
 ##############################################################################################
 
 # 
-def test_modularity_variable_mod(G, mod_nodes):
+def test_modularity_variable_mod(G, mod_nodes, verbose):
     """Computes Q value of a graph when the nodal assignment to modules is known"""
     
     mods = len(mod_nodes.keys()) # number of modules
@@ -646,6 +646,9 @@ def test_modularity_variable_mod(G, mod_nodes):
     Q=0
     wd_bar=[]
     d_bar=[]
+    
+
+	
     for modules in range (0,mods):
         wdsum=0
         dsum=0
@@ -669,6 +672,9 @@ def test_modularity_variable_mod(G, mod_nodes):
     print ("Network size"), N
     print ("List of module sizes"), s
     print ("Estimated modularity = "), Q
+    if verbose:
+	for modules in range (0,mods):
+	    print ("Module #"+str(modules)+" has node ids ="), mod_nodes[modules]
   
     
     return Q
